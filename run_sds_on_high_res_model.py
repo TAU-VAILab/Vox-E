@@ -6,7 +6,7 @@ from easydict import EasyDict
 from torch.backends import cudnn
 
 from thre3d_atom.data.datasets import PosedImagesDataset
-from thre3d_atom.modules.trainers import train_sh_vox_grid_vol_mod_with_posed_images
+from thre3d_atom.modules.sds_trainer import train_sh_vox_grid_vol_mod_with_posed_images_and_sds
 from thre3d_atom.modules.volumetric_model import (
     VolumetricModel,
     create_volumetric_model_from_saved_model,
@@ -48,6 +48,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=True, help="path to the pre-trained high-res model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for training output")
+@click.option("-p", "--sds_prompt", type=click.STRING, required=True,
+              help="sds prompt used for SDS based loss")
 
 # Input dataset related arguments:
 @click.option("--separate_train_test_folders", type=click.BOOL, required=False,
@@ -135,6 +137,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--fast_debug_mode", type=click.BOOL, required=False, default=False,
               help="whether to use the fast debug mode while training "
                    "(skips testing and some lengthy visualizations)", show_default=True)
+
+# sds specific stuff
+@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.001,
+              help="diffuse weight used for regularization", show_default=True)
+@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.001,
+              help="specular weight used for regularization", show_default=True)
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -172,71 +181,6 @@ def main(**kwargs) -> None:
         )
         test_dataset = None
 
-    # Choose the proper activations dict based on the requested mode:
-    #if config.use_relu_field:
-    #    vox_grid_density_activations_dict = {
-    #        "density_preactivation": torch.nn.Identity(),
-    #        "density_postactivation": torch.nn.ReLU(),
-    #        # note this expected density value :)
-    #        "expected_density_scale": compute_expected_density_scale_for_relu_field_grid(
-    #            config.grid_world_size
-    #        ),
-    #    }
-    #if config.use_softplus_field:
-    #    vox_grid_density_activations_dict = {
-    #        "density_preactivation": torch.nn.Identity(),
-    #        "density_postactivation": torch.nn.Softplus(),
-    #        # note this expected density value :)
-    #        "expected_density_scale": compute_expected_density_scale_for_relu_field_grid(
-    #            config.grid_world_size
-    #        ),
-    #    }
-    #else:
-    #    vox_grid_density_activations_dict = {
-    #        "density_preactivation": torch.abs,
-    #        "density_postactivation": torch.nn.Identity(),
-    #        "expected_density_scale": 1.0,  # Also note this expected density value :wink:
-    #    }
-    # The use of terminologies pre-activation and post-activations is inspired from the
-    # amazing DVGo work -> https://sunset1995.github.io/dvgo/
-    # Please feel free to check out their work for lot more detailed and exhaustive experiments
-    # On 3D scene reconstructions.
-    # P.S. Not a criticism :wink:, but there isn't and can never be such a thing as IN-ACTIVATION
-    # IT'S NOT A FEATURE, IT'S A BUG! :D :D
-
-    # construct the VoxelGrid thre3d_repr :)
-    # fmt: off
-    #densities = torch.empty((*config.grid_dims, 1), dtype=torch.float32, device=device)
-    #torch.nn.init.uniform_(densities, -1.0, 1.0)
-    #num_sh_features = NUM_COLOUR_CHANNELS * ((config.sh_degree + 1) ** 2)
-    #features = torch.empty((*config.grid_dims, num_sh_features), dtype=torch.float32, device=device)
-    #torch.nn.init.uniform_(features, -1.0, 1.0)
-    #voxel_size = VoxelSize(*[dim_size / grid_dim for dim_size, grid_dim
-    #                         in zip(config.grid_world_size, config.grid_dims)])
-    #voxel_grid = VoxelGrid(
-    #    densities=densities,
-    #    features=features,
-    #    voxel_size=voxel_size,
-    #    grid_location=VoxelGridLocation(*config.grid_location),
-    #    **vox_grid_density_activations_dict,
-    #    tunable=True,
-    #)
-    ## fmt: on#
-    ## set up a volumetricModel using the previously created voxel-grid
-    ## noinspection PyTypeChecker
-    #vox_grid_vol_mod = VolumetricModel(
-    #    thre3d_repr=voxel_grid,
-    #    render_procedure=render_sh_voxel_grid,
-    #    render_config=SHVoxGridRenderConfig(
-    #        num_samples_per_ray=config.train_num_samples_per_ray,
-    #        camera_bounds=train_dataset.camera_bounds,
-    #        white_bkgd=config.white_bkgd,
-    #        render_num_samples_per_ray=config.render_num_samples_per_ray,
-    #        parallel_rays_chunk_size=config.parallel_rays_chunk_size,
-    #    ),
-    #    device=device,
-    #)
-
     vox_grid_vol_mod, extra_info = create_volumetric_model_from_saved_model(
         model_path=model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
@@ -244,7 +188,7 @@ def main(**kwargs) -> None:
     )
 
     # train the model:
-    train_sh_vox_grid_vol_mod_with_posed_images(
+    train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         vol_mod=vox_grid_vol_mod,
         train_dataset=train_dataset,
         output_dir=output_path,
@@ -265,6 +209,9 @@ def main(**kwargs) -> None:
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         fast_debug_mode=config.fast_debug_mode,
+        diffuse_weight=config.diffuse_weight,
+        specular_weight=config.specular_weight,
+        sds_prompt=config.sds_prompt
     )
 
 
