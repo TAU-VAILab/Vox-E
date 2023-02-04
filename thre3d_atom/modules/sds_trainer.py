@@ -17,8 +17,9 @@ from thre3d_atom.modules.testers import test_sh_vox_grid_vol_mod_with_posed_imag
 from thre3d_atom.modules.volumetric_model import VolumetricModel
 from thre3d_atom.rendering.volumetric.utils.misc import (
     cast_rays,
-    collate_rays,
-    sample_random_rays_and_pixels_synchronously,
+    collate_rays_unflattened,
+    sample_rays_and_pixels_synchronously,
+    sample_rays_directions_and_pixels_synchronously,
     flatten_rays,
 )
 from thre3d_atom.thre3d_reprs.renderers import render_sh_voxel_grid
@@ -83,6 +84,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     diffuse_weight: float = 0.001,
     specular_weight: float = 0.001,
     sds_prompt: str = "none",
+    directional_dataset: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -133,7 +135,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     ), f"sorry, you have to supply a text prompt to use SDS"
     
     # init sds loss class
-    sd_loss = scoreDistillationLoss(vol_mod.device, sds_prompt)
+    sds_loss = scoreDistillationLoss(vol_mod.device, sds_prompt, directional=directional_dataset)
+    direction_batch = None
 
     # fix the sizes of the feature grids at different stages
     stagewise_voxel_grid_sizes = compute_thre3d_grid_sizes(
@@ -151,19 +154,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             {"downsample_factor": data_downsample_factor * (scale_factor**stage)}
         )
         stagewise_train_datasets.insert(0, PosedImagesDataset(**dataset_config_dict))
-
-    # downscale the feature-grid to the smallest size:
-    with torch.no_grad():
-        # TODO: Possibly create a nice interface for reprs as a resolution of the below warning
-        # noinspection PyTypeChecker
-        vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
-            vol_mod.thre3d_repr,
-            output_size=stagewise_voxel_grid_sizes[0],
-            mode="trilinear",
-        )
-        # reinitialize the scaled features and densities to remove any bias
-        random_initializer(vol_mod.thre3d_repr.densities)
-        random_initializer(vol_mod.thre3d_repr.features)
 
     # setup render_feedback_pose
     real_feedback_image = None
@@ -289,20 +279,25 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # sample a batch rays and pixels for a single iteration
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
-            images, poses = next(infinite_train_dl)
+            if directional_dataset:
+                images, poses, dirs = next(infinite_train_dl)
+            else:
+                images, poses
 
             # cast rays for all the loaded images:
             rays_list = []
+            unflattened_rays_list = []
             for pose in poses:
-                casted_rays = flatten_rays(
-                    cast_rays(
+                unflattened_rays = cast_rays(
                         current_stage_train_dataset.camera_intrinsics,
                         CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
                         device=vol_mod.device,
                     )
-                )
+                casted_rays = flatten_rays(unflattened_rays)
                 rays_list.append(casted_rays)
-            rays = collate_rays(rays_list)
+                unflattened_rays_list.append(unflattened_rays)
+
+            unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
 
             # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
             pixels = (
@@ -310,19 +305,29 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 .reshape(-1, images.shape[1])
                 .to(vol_mod.device)
             )
+            _, _, im_h, im_w = images.shape
 
             # sample a subset of rays and pixels synchronously
-            rays_batch, pixels_batch = sample_random_rays_and_pixels_synchronously(
-                rays, pixels, ray_batch_size
-            )
+            batch_size_in_images = int(ray_batch_size / (im_h * im_w))
+            if directional_dataset:
+                rays_batch, pixels_batch, direction_batch = sample_rays_directions_and_pixels_synchronously(
+                    unflattened_rays, images, dirs, batch_size_in_images
+                )
+            else:
+                rays_batch, pixels_batch = sample_rays_and_pixels_synchronously(
+                    unflattened_rays, images, batch_size_in_images
+                )
 
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch = vol_mod.render_rays(rays_batch)
             specular_rendered_pixels_batch = specular_rendered_batch.colour
 
+            # run sds loss training step!
+            sds_loss.training_step(specular_rendered_batch.colour, im_h, im_w, direction_batch)
+
             # compute loss and perform gradient update
             # Main, specular loss
-            total_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch)
+            total_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch) * specular_weight
 
             # logging info:
             specular_loss_value = total_loss
@@ -341,7 +346,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
                 # compute diffuse loss
                 diffuse_loss = l1_loss(diffuse_rendered_pixels_batch, pixels_batch)
-                total_loss = total_loss + diffuse_loss
+                total_loss = total_loss + diffuse_loss * diffuse_weight
 
                 # logging info:
                 diffuse_loss_value = diffuse_loss
@@ -350,9 +355,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 )
 
             # optimization steps:
-            optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
+            optimizer.zero_grad()
             # ---------------------------------------------------------------------------------
 
             # rest of the code per iteration is related to saving/logging/feedback/testing

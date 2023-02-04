@@ -215,25 +215,40 @@ if __name__ == '__main__':
     plt.imshow(imgs[0])
     plt.show()
 
-
 class scoreDistillationLoss(nn.Module):
     def __init__(self,
                  device,
                  prompt, 
                  directional = False):
         super().__init__()
-
+        self.dir_to_indx_dict = {}
+        self.directional = directional
         # get sd model
         self.sd_model = StableDiffusion(device,"2.0", hf_key="Fictiverse/Stable_Diffusion_VoxelArt_Model")
 
         # encode text
-        self.text_encoding = self.sd_model.get_text_embeds(prompt, '')
+        if directional:
+            self.text_encodings = {}
+            for dir_prompt in ['side', 'overhead', 'back', 'front']:
+                print(f"Encoding text for \'{dir_prompt}\' direction")
+                modified_prompt = prompt + f", {dir_prompt} view"
+                self.text_encodings[dir_prompt] = self.sd_model.get_text_embeds(modified_prompt, '')
+        else:
+            self.text_encoding = self.sd_model.get_text_embeds(prompt, '')
     
-    def training_step(self, output, image_height, image_width):
+    def training_step(self, output, image_height, image_width, directions=None):
+        if self.directional:
+            assert (directions != None), f"Must supply direction if SDS loss is set to directional mode"
         # format output images
         out_imgs = torch.reshape(output, (-1, image_height, image_width, 3))
         out_imgs = out_imgs.permute((0, 3, 1, 2))
 
         # perform training step
-        self.sd_model.train_step(self.text_encoding, out_imgs)
+        if not self.directional:
+            self.sd_model.train_step(self.text_encoding, out_imgs)
+        else:
+            for dir_prompt in directions:
+                encoding = self.text_encodings[dir_prompt]
+                self.sd_model.train_step(encoding, out_imgs)
+
 

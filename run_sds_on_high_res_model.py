@@ -2,6 +2,8 @@ from pathlib import Path
 
 import click
 import torch
+import wandb
+from datetime import datetime
 from easydict import EasyDict
 from torch.backends import cudnn
 
@@ -56,7 +58,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               default=True, help="whether the data directory has separate train and test folders", 
               show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
-              default=2.0, help="downscale factor for the input images if needed."
+              default=4.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
 
 # Voxel-grid related arguments:
@@ -93,17 +95,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)  # this option is also used in pre-processing the dataset
 
 # Training related arguments:
-@click.option("--ray_batch_size", type=click.INT, required=False, default=16384,
+@click.option("--ray_batch_size", type=click.INT, required=False, default=65536,
               help="number of randomly sampled rays used per training iteration", show_default=True)
 @click.option("--train_num_samples_per_ray", type=click.INT, required=False, default=256,
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=1500,
+@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=3000,
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.03,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=2e-2,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=400,
               help="number of iterations after which lr is exponentially decayed per stage", show_default=True)
@@ -139,10 +141,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                    "(skips testing and some lengthy visualizations)", show_default=True)
 
 # sds specific stuff
-@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.001,
+@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.00001,
               help="diffuse weight used for regularization", show_default=True)
-@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.001,
+@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.00001,
               help="specular weight used for regularization", show_default=True)
+@click.option("--directional_dataset", type=click.BOOL, required=False, default=False,
+              help="whether to use a directional dataset for SDS where each view comes with a direction",
+               show_default=True)
 
 # fmt: on
 # -------------------------------------------------------------------------------------
@@ -150,6 +155,9 @@ def main(**kwargs) -> None:
     # load the requested configuration for the training
     config = EasyDict(kwargs)
 
+    wandb.init(project='VoxelArtReluFields', entity="etaisella",
+               config=dict(config), name="test " + str(datetime.now()), 
+               id=wandb.util.generate_id())
     # parse os-checked path-strings into Pathlike Paths :)
     data_path = Path(config.data_path)
     model_path = Path(config.high_res_model_path)
@@ -160,28 +168,49 @@ def main(**kwargs) -> None:
     log_config_to_disk(config, output_path)
 
     # create a datasets for training and testing:
-    if config.separate_train_test_folders:
-        train_dataset, test_dataset = (
+    if config.directional_dataset:
+        train_dataset = (
             PosedImagesDataset(
-                images_dir=data_path / mode,
-                camera_params_json=data_path / f"{mode}_camera_params.json",
+                images_dir=data_path / "touchup",
+                camera_params_json=data_path / f"touchup_camera_params.json",
+                normalize_scene_scale=config.normalize_scene_scale,
+                downsample_factor=config.data_downsample_factor,
+                rgba_white_bkgd=config.white_bkgd,
+                directional=True
+            )
+        )
+        test_dataset = (
+            PosedImagesDataset(
+                images_dir=data_path / "test",
+                camera_params_json=data_path / f"test_camera_params.json",
                 normalize_scene_scale=config.normalize_scene_scale,
                 downsample_factor=config.data_downsample_factor,
                 rgba_white_bkgd=config.white_bkgd,
             )
-            for mode in ("train", "test")
         )
     else:
-        train_dataset = PosedImagesDataset(
-            images_dir=data_path / "images",
-            camera_params_json=data_path / "camera_params.json",
-            normalize_scene_scale=config.normalize_scene_scale,
-            downsample_factor=config.data_downsample_factor,
-            rgba_white_bkgd=config.white_bkgd,
-        )
-        test_dataset = None
+        if config.separate_train_test_folders:
+            train_dataset, test_dataset = (
+                PosedImagesDataset(
+                    images_dir=data_path / mode,
+                    camera_params_json=data_path / f"{mode}_camera_params.json",
+                    normalize_scene_scale=config.normalize_scene_scale,
+                    downsample_factor=config.data_downsample_factor,
+                    rgba_white_bkgd=config.white_bkgd,
+                )
+                for mode in ("train", "test")
+            )
+        else:
+            train_dataset = PosedImagesDataset(
+                images_dir=data_path / "images",
+                camera_params_json=data_path / "camera_params.json",
+                normalize_scene_scale=config.normalize_scene_scale,
+                downsample_factor=config.data_downsample_factor,
+                rgba_white_bkgd=config.white_bkgd,
+            )
+            test_dataset = None
 
-    vox_grid_vol_mod, extra_info = create_volumetric_model_from_saved_model(
+    vox_grid_vol_mod, _ = create_volumetric_model_from_saved_model(
         model_path=model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
         device=device,
@@ -211,7 +240,8 @@ def main(**kwargs) -> None:
         fast_debug_mode=config.fast_debug_mode,
         diffuse_weight=config.diffuse_weight,
         specular_weight=config.specular_weight,
-        sds_prompt=config.sds_prompt
+        sds_prompt=config.sds_prompt,
+        directional_dataset=config.directional_dataset
     )
 
 

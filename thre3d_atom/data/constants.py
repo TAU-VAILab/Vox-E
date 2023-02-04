@@ -2,6 +2,7 @@
 EXTRINSIC = "extrinsic"
 INTRINSIC = "intrinsic"
 ROTATION = "rotation"
+DIRECTION = "dir"
 TRANSLATION = "translation"
 HEIGHT = "height"
 WIDTH = "width"

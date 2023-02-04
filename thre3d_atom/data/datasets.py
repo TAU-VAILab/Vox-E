@@ -17,6 +17,7 @@ from thre3d_atom.data.constants import (
     EXTRINSIC,
     ROTATION,
     TRANSLATION,
+    DIRECTION
 )
 from thre3d_atom.data.utils import get_torch_vision_image_transform
 from thre3d_atom.utils.imaging_utils import (
@@ -37,6 +38,7 @@ class PosedImagesDataset(torch_data.Dataset):
         normalize_scene_scale: bool = False,
         downsample_factor: float = 1.0,  # no downsampling by default
         rgba_white_bkgd: bool = False,  # whether to convert rgba images to have white background
+        directional: bool = False, # wether or not there is a direction prompt for each view
     ) -> None:
         assert images_dir.exists(), f"Images dir doesn't exist: {images_dir}"
         assert (
@@ -44,6 +46,7 @@ class PosedImagesDataset(torch_data.Dataset):
         ), f"CameraParams file doesn't exist: {camera_params_json}"
 
         super().__init__()
+        self.directional = directional
 
         # setup image file paths and corresponding camera parameters
         image_file_paths = list(images_dir.iterdir())
@@ -75,13 +78,18 @@ class PosedImagesDataset(torch_data.Dataset):
         #  Data Caching code :)                                                                   |
         # -----------------------------------------------------------------------------------------
         self._cached_data_mode = False
-        self._cached_images, self._cached_poses = None, None
+        self._cached_images, self._cached_poses, self._cached_directions = None, None, None
         cache_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         try:
             # attempt caching of the data in gpu-memory first
-            self._cached_images, self._cached_poses = self._cache_all_data(
-                cache_device=cache_device
-            )
+            if directional:
+                self._cached_images, self._cached_poses, self._cached_directions = self._cache_all_data_directional(
+                    cache_device=cache_device
+                )
+            else:
+                self._cached_images, self._cached_poses = self._cache_all_data(
+                    cache_device=cache_device
+                )
             log.info(
                 f"Caching of all {len(self._cached_images)} data-samples "
                 f"at resolution [{self._camera_intrinsics.height} x {self._camera_intrinsics.width}] "
@@ -182,6 +190,30 @@ class PosedImagesDataset(torch_data.Dataset):
         self._cached_data_mode = True
 
         return images_cache, poses_cache
+    
+    def _cache_all_data_directional(
+        self, cache_device: torch.device
+    ) -> Tuple[Dict[Path, Tensor], Dict[Path, Tensor]]:
+        images_cache, poses_cache, dir_cache = {}, {}, {}
+        for image_file_path in self._image_file_paths:
+            # load -> process -> cache the image
+            image = Image.open(image_file_path)
+            image = self._process_image(image).to(cache_device)
+            images_cache[image_file_path] = image
+
+            # load -> cache the pose
+            camera_params = self._camera_parameters[image_file_path.name]
+            pose = self.extract_pose(camera_params)
+            unified_pose = torch.from_numpy(
+                np.hstack((pose.rotation, pose.translation))
+            ).to(cache_device)
+            poses_cache[image_file_path] = unified_pose
+            dir_cache[image_file_path] = self.extract_dir(camera_params)
+
+        # successfully cached all the data! yay!!
+        self._cached_data_mode = True
+
+        return images_cache, poses_cache, dir_cache
 
     def _normalize_scene_scale(self):
         # obtain all the locations of the cameras and compute the distance of the farthest camera from origin
@@ -294,6 +326,13 @@ class PosedImagesDataset(torch_data.Dataset):
             np.float32
         )  # 3 x 1 translation vector
         return CameraPose(rotation, translation)
+    
+    @staticmethod
+    def extract_dir(camera_params: Dict[str, Any]) -> str:
+        """could be private utility function to turn the pose in dictionary form
+        into the CameraPose NamedTuple"""
+        dir = str(camera_params[DIRECTION])
+        return dir
 
     def __len__(self) -> int:
         return len(self._image_file_paths)
@@ -305,14 +344,22 @@ class PosedImagesDataset(torch_data.Dataset):
         # -----------------------------------------------------------------------------------------
         #  Actual data-loading code :)                                                            |
         # -----------------------------------------------------------------------------------------
+
         if self._cached_data_mode:
             # just access the cached images and poses if operating in the cached data mode,
             # otherwise, revert to the default behaviour of loading and pre-processing the
             # data per request.
-            image, unified_pose = (
-                self._cached_images[image_file_path],
-                self._cached_poses[image_file_path],
-            )
+            if self.directional:
+                image, unified_pose, direction = (
+                    self._cached_images[image_file_path],
+                    self._cached_poses[image_file_path],
+                    self._cached_directions[image_file_path],
+                )
+            else:
+                image, unified_pose = (
+                    self._cached_images[image_file_path],
+                    self._cached_poses[image_file_path],
+                )
         else:
             # retrieve the camera_parameters of the image and make a single tensor
             # for using the pytorch's data-loading machinery :)
@@ -325,6 +372,7 @@ class PosedImagesDataset(torch_data.Dataset):
             # load and normalize the image per request:
             image = Image.open(image_file_path)
             image = self._process_image(image)
+            direction = self.extract_dir(camera_params)
         # -----------------------------------------------------------------------------------------
 
         # change the dynamic range of the image values if they are different from the pytorch's default range
@@ -336,4 +384,7 @@ class PosedImagesDataset(torch_data.Dataset):
             )
 
         # return the image and it's camera pose
+        if self.directional:
+            return image, unified_pose, direction
+
         return image, unified_pose
