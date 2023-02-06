@@ -171,7 +171,7 @@ def sample_rays_directions_and_pixels_synchronously(
     selected_directions = directions[sampled_subset]
     if sample_size == 1:
         selected_directions = [selected_directions]
-    return flattened_selected_rays, selected_pixels, selected_directions
+    return flattened_selected_rays, selected_pixels, selected_directions, sampled_subset.tolist()
 
 def collate_rendered_output(rendered_chunks: Sequence[RenderOut]) -> RenderOut:
     """Defines how a sequence of rendered_chunks can be

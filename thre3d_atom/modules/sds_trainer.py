@@ -10,6 +10,7 @@ from torch import Tensor
 from torch.nn.functional import l1_loss, mse_loss
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 from thre3d_atom.data.datasets import PosedImagesDataset
 from thre3d_atom.data.utils import infinite_dataloader
@@ -44,7 +45,7 @@ from thre3d_atom.visualizations.static import (
     visualize_sh_vox_grid_vol_mod_rendered_feedback,
 )
 
-
+dir_to_num_dict = {'side':0, 'overhead':1, 'back':2, 'front':3}
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
 
@@ -85,6 +86,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     specular_weight: float = 0.001,
     sds_prompt: str = "none",
     directional_dataset: bool = False,
+    use_uncertainty: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -137,6 +139,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     # init sds loss class
     sds_loss = scoreDistillationLoss(vol_mod.device, sds_prompt, directional=directional_dataset)
     direction_batch = None
+    selected_idxs = [0]
+
+    if use_uncertainty:
+        num_poses = len(train_dataset)
+        logvars = torch.nn.parameter(torch.zeros(num_poses, device=vol_mod.device))
+        
 
     # fix the sizes of the feature grids at different stages
     stagewise_voxel_grid_sizes = compute_thre3d_grid_sizes(
@@ -279,10 +287,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # sample a batch rays and pixels for a single iteration
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
+            global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
+
             if directional_dataset:
                 images, poses, dirs = next(infinite_train_dl)
             else:
-                images, poses
+                images, poses = next(infinite_train_dl)
 
             # cast rays for all the loaded images:
             rays_list = []
@@ -310,13 +320,18 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # sample a subset of rays and pixels synchronously
             batch_size_in_images = int(ray_batch_size / (im_h * im_w))
             if directional_dataset:
-                rays_batch, pixels_batch, direction_batch = sample_rays_directions_and_pixels_synchronously(
+                rays_batch, pixels_batch, direction_batch, selected_idxs = sample_rays_directions_and_pixels_synchronously(
                     unflattened_rays, images, dirs, batch_size_in_images
                 )
             else:
                 rays_batch, pixels_batch = sample_rays_and_pixels_synchronously(
                     unflattened_rays, images, batch_size_in_images
                 )
+
+            # log inputs
+            wandb.log({"Input Image": wandb.Image(images[selected_idxs[0]])}, step=global_step)
+            if directional_dataset:
+                wandb.log({"Input Direction": dir_to_num_dict[dirs[selected_idxs[0]]]}, step=global_step)
 
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch = vol_mod.render_rays(rays_batch)
@@ -362,7 +377,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
             # rest of the code per iteration is related to saving/logging/feedback/testing
             time_spent_actually_training += time.perf_counter() - last_time
-            global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
+            
 
             # tensorboard summaries feedback
             if (

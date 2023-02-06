@@ -101,11 +101,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=3000,
+@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=4000,
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=2e-2,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.04,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=400,
               help="number of iterations after which lr is exponentially decayed per stage", show_default=True)
@@ -141,9 +141,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                    "(skips testing and some lengthy visualizations)", show_default=True)
 
 # sds specific stuff
-@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.00001,
+@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.0000001,
               help="diffuse weight used for regularization", show_default=True)
-@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.00001,
+@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.0000001,
               help="specular weight used for regularization", show_default=True)
 @click.option("--directional_dataset", type=click.BOOL, required=False, default=False,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
