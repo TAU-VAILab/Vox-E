@@ -61,7 +61,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--grid_world_size", type=click.FLOAT, nargs=3, required=False, default=(3.0, 3.0, 3.0),
               help="size (extent) of the grid in world coordinate system."
                    "Please carefully note it's use in conjunction with the normalization :)", show_default=True)
-@click.option("--sh_degree", type=click.INT, required=False, default=2,
+@click.option("--sh_degree", type=click.INT, required=False, default=0,
               help="degree of the spherical harmonics coefficients to be used. "
                    "Supported values: [0, 1, 2, 3]", show_default=True)
 # -------------------------------------------------------------------------------------

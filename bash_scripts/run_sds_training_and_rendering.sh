@@ -21,7 +21,7 @@ train_and_render() {
 	python run_sds_on_high_res_model.py \
 	-d ../data/${1}/ \
 	-o logs/rf/${1}_sds_dir_${3}_${4}/ \
-	-i logs/rf/high_res_${1}/saved_models/model_final.pth \
+	-i logs/rf/high_res_${1}_diffuse/saved_models/model_final.pth \
 	-p "$2" \
 	--directional_dataset=${3} \
 	--sh_degree=0 # we currently only support diffuse
@@ -35,9 +35,9 @@ train_and_render() {
 
 # STARTING RUN:
 
-scene=lego
-prompt="a render of a yellow bulldozer made of playdough"
+scene=dog2
+prompt="a render of a cute light gray dog wearing sunglasses"
 directional=False
-log_name="playdough" # 1-word description of the prompt for saving
+log_name="sunglasses" # 1-word description of the prompt for saving
 
 train_and_render $scene "$prompt" $directional $log_name

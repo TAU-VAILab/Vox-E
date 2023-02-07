@@ -72,7 +72,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--grid_world_size", type=click.FLOAT, nargs=3, required=False, default=(3.0, 3.0, 3.0),
               help="size (extent) of the grid in world coordinate system."
                    "Please carefully note it's use in conjunction with the normalization :)", show_default=True)
-@click.option("--sh_degree", type=click.INT, required=False, default=2,
+@click.option("--sh_degree", type=click.INT, required=False, default=0,
               help="degree of the spherical harmonics coefficients to be used. "
                    "Supported values: [0, 1, 2, 3]", show_default=True)
 # -------------------------------------------------------------------------------------
@@ -152,9 +152,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--use_uncertainty", type=click.BOOL, required=False, default=False,
               help="whether to use an uncertainty aware type loss",
                show_default=True)
-@click.option("--new_frame_frequency", type=click.INT, required=False, default=5,
+@click.option("--new_frame_frequency", type=click.INT, required=False, default=1,
               help="number of iterations where we work on the same pose", show_default=True)
-
+@click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=0.0,
+              help="weight for density correlation loss", show_default=True)
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:

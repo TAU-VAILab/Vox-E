@@ -410,7 +410,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # rest of the code per iteration is related to saving/logging/feedback/testing
             time_spent_actually_training += time.perf_counter() - last_time
             
-
             # tensorboard summaries feedback
             if (
                 global_step % summary_freq == 0
@@ -470,36 +469,37 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"TIME CHECK: time spent actually training "
                     f"till now: {timedelta(seconds=time_spent_actually_training)}"
                 )
-                visualize_sh_vox_grid_vol_mod_rendered_feedback(
-                    vol_mod=sds_vol_mod,
-                    vol_mod_name="sds",
-                    render_feedback_pose=render_feedback_pose,
-                    camera_intrinsics=camera_intrinsics,
-                    global_step=global_step,
-                    feedback_logs_dir=render_dir,
-                    parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
-                    training_time=time_spent_actually_training,
-                    log_diffuse_rendered_version=True,
-                    use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
-                    overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
-                    verbose_rendering=verbose_rendering,
-                    log_wandb=True,
-                )
+                with torch.no_grad():
+                    visualize_sh_vox_grid_vol_mod_rendered_feedback(
+                        vol_mod=sds_vol_mod,
+                        vol_mod_name="sds",
+                        render_feedback_pose=render_feedback_pose,
+                        camera_intrinsics=camera_intrinsics,
+                        global_step=global_step,
+                        feedback_logs_dir=render_dir,
+                        parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
+                        training_time=time_spent_actually_training,
+                        log_diffuse_rendered_version=apply_diffuse_render_regularization,
+                        use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+                        overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
+                        verbose_rendering=verbose_rendering,
+                        log_wandb=True,
+                    )
 
-                visualize_sh_vox_grid_vol_mod_rendered_feedback(
-                    vol_mod=pretrained_vol_mod,
-                    vol_mod_name="pretrained",
-                    render_feedback_pose=render_feedback_pose,
-                    camera_intrinsics=camera_intrinsics,
-                    global_step=global_step,
-                    feedback_logs_dir=render_dir,
-                    parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
-                    training_time=time_spent_actually_training,
-                    log_diffuse_rendered_version=True,
-                    use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
-                    overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
-                    verbose_rendering=verbose_rendering,
-                )
+                    visualize_sh_vox_grid_vol_mod_rendered_feedback(
+                        vol_mod=pretrained_vol_mod,
+                        vol_mod_name="pretrained",
+                        render_feedback_pose=render_feedback_pose,
+                        camera_intrinsics=camera_intrinsics,
+                        global_step=global_step,
+                        feedback_logs_dir=render_dir,
+                        parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
+                        training_time=time_spent_actually_training,
+                        log_diffuse_rendered_version=apply_diffuse_render_regularization,
+                        use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+                        overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
+                        verbose_rendering=verbose_rendering,
+                    )
 
             # obtain and log the test metrics
             if (
@@ -610,5 +610,27 @@ def _log_variances_in_wandb(logvars, global_step):
     plt.tight_layout()
     wandb.log({"Variances per Pose": wandb.Image(plt)}, step=global_step)
     plt.close(fig)
+
+def _density_correlation_loss(sds_vol_mod: VolumetricModel,
+                              regular_vol_mod: VolumetricModel):
+    eps = 0.0000001 # for numerical stability
+
+    # Get densities (currently detach regular density):
+    sds_density = sds_vol_mod.thre3d_repr._densities
+    regular_density = regular_vol_mod.thre3d_repr._densities.detach()
+
+    # Calculate Denominator:
+    sds_var = torch.mean(sds_density - torch.mean(sds_density))
+    regular_var = torch.mean(regular_density - torch.mean(regular_density))
+    denominator = torch.sqrt(sds_var * regular_var)
+
+    # Calculate Covariance:
+    covariance = (sds_density - torch.mean(sds_density)) * \
+        (regular_density - torch.mean(regular_density))
+    covariance = torch.mean(covariance)
+
+    # Return Result:
+    correlation = covariance / (denominator + eps)
+    return -correlation
     
 

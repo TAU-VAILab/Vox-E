@@ -129,7 +129,7 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback(
 ) -> None:
     # Bump up the num_samples_per_ray to a high-value for reducing MC noise
     if overridden_num_samples_per_ray is None:
-        overridden_num_samples_per_ray_for_beautiful_renders = 1024  # :)
+        overridden_num_samples_per_ray_for_beautiful_renders = 512  # :)
     else:
         overridden_num_samples_per_ray_for_beautiful_renders = (
             overridden_num_samples_per_ray
