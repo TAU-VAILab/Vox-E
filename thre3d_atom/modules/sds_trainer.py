@@ -91,6 +91,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     directional_dataset: bool = False,
     use_uncertainty: bool = False,
     new_frame_frequency: int = 1,
+    density_correlation_weight: float = 0.0,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -388,7 +389,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     mse_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
                 )
 
-            # insert loss that ties them togethere here:
+            ### insert losses that tie them together here ###
+            density_correlation_loss = 0.0
+            if density_correlation_weight != 0.0:
+                density_correlation_loss = _density_correlation_loss(sds_vol_mod=sds_vol_mod,
+                                                                     regular_vol_mod=pretrained_vol_mod)
+                total_loss = total_loss + density_correlation_loss * density_correlation_weight
 
             # optimization steps:
             total_loss.backward()
@@ -400,6 +406,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 _log_variances_in_wandb(logvars, global_step)
             wandb.log({"specular_loss" : specular_loss_value}, step=global_step)
             wandb.log({"diffuse_loss" : diffuse_loss_value}, step=global_step)
+            wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
             wandb.log({"specular_psnr" : specular_psnr_value}, step=global_step)
             wandb.log({"diffuse_psnr" : diffuse_psnr_value}, step=global_step)
             wandb.log({"total_loss" : total_loss}, step=global_step)
@@ -620,8 +627,8 @@ def _density_correlation_loss(sds_vol_mod: VolumetricModel,
     regular_density = regular_vol_mod.thre3d_repr._densities.detach()
 
     # Calculate Denominator:
-    sds_var = torch.mean(sds_density - torch.mean(sds_density))
-    regular_var = torch.mean(regular_density - torch.mean(regular_density))
+    sds_var = torch.mean((sds_density - torch.mean(sds_density))**2)
+    regular_var = torch.mean((regular_density - torch.mean(regular_density))**2)
     denominator = torch.sqrt(sds_var * regular_var)
 
     # Calculate Covariance:
@@ -631,6 +638,6 @@ def _density_correlation_loss(sds_vol_mod: VolumetricModel,
 
     # Return Result:
     correlation = covariance / (denominator + eps)
-    return -correlation
+    return 1.0 - correlation
     
 

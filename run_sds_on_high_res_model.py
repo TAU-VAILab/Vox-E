@@ -254,6 +254,7 @@ def main(**kwargs) -> None:
         directional_dataset=config.directional_dataset,
         use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
+        density_correlation_weight=config.density_correlation_weight,
     )
 
 
