@@ -125,6 +125,7 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback(
     use_optimized_sampling_mode: bool = False,
     overridden_num_samples_per_ray: Optional[int] = None,
     verbose_rendering: bool = True,
+    log_wandb: bool = False,
 ) -> None:
     # Bump up the num_samples_per_ray to a high-value for reducing MC noise
     if overridden_num_samples_per_ray is None:
@@ -154,7 +155,8 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback(
         specular_feedback_image,
     )
 
-    wandb.log({f"specular img {vol_mod_name}": wandb.Image(specular_feedback_image)}, step=global_step)
+    if log_wandb:
+        wandb.log({f"specular img {vol_mod_name}": wandb.Image(specular_feedback_image)}, step=global_step)
 
     if log_diffuse_rendered_version:
         diffuse_rendered_output = vol_mod.render(
@@ -175,4 +177,5 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback(
             diffuse_feedback_image,
         )
 
-        wandb.log({f"diffuse img {vol_mod_name}": wandb.Image(diffuse_feedback_image)}, step=global_step)
+        if log_wandb:
+            wandb.log({f"diffuse img {vol_mod_name}": wandb.Image(diffuse_feedback_image)}, step=global_step)

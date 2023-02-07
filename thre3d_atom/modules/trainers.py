@@ -275,7 +275,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             # sample a batch rays and pixels for a single iteration
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
-            images, poses = next(infinite_train_dl)
+            images, poses, _ = next(infinite_train_dl)
 
             # cast rays for all the loaded images:
             rays_list = []
@@ -404,6 +404,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                 )
                 visualize_sh_vox_grid_vol_mod_rendered_feedback(
                     vol_mod=vol_mod,
+                    vol_mod_name="default",
                     render_feedback_pose=render_feedback_pose,
                     camera_intrinsics=camera_intrinsics,
                     global_step=global_step,

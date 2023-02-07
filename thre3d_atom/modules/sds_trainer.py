@@ -483,6 +483,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
                     overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
                     verbose_rendering=verbose_rendering,
+                    log_wandb=True,
                 )
 
                 visualize_sh_vox_grid_vol_mod_rendered_feedback(
