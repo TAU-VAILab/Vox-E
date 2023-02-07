@@ -140,6 +140,7 @@ def sample_random_rays_and_pixels_synchronously(
 def sample_rays_and_pixels_synchronously(
     rays: Rays,
     pixels: Tensor,
+    indices: list,
     sample_size: int,
 ) -> Tuple[Rays, Tensor]:
     dtype, device = pixels.dtype, pixels.device
@@ -150,13 +151,17 @@ def sample_rays_and_pixels_synchronously(
     selected_rays_directions = rays_directions[sampled_subset, :]
     flattened_selected_rays = flatten_rays(Rays(selected_rays_origins, selected_rays_directions))
     selected_pixels = pixels[sampled_subset, :]
+    selected_indices = indices[sampled_subset.to('cpu')]
+    if sample_size == 1:
+        selected_indices = [selected_indices]
     selected_pixels = selected_pixels.permute(0, 2, 3, 1).reshape(-1, pixels.shape[1])
-    return flattened_selected_rays, selected_pixels
+    return flattened_selected_rays, selected_pixels, selected_indices
 
 def sample_rays_directions_and_pixels_synchronously(
     rays: Rays,
     pixels: Tensor,
     directions: list,
+    indices: list,
     sample_size: int,
 ) -> Tuple[Rays, Tensor]:
     dtype, device = pixels.dtype, pixels.device
@@ -169,9 +174,12 @@ def sample_rays_directions_and_pixels_synchronously(
     selected_pixels = pixels[sampled_subset, :]
     selected_pixels = selected_pixels.permute(0, 2, 3, 1).reshape(-1, pixels.shape[1])
     selected_directions = directions[sampled_subset]
+    selected_indices = indices[sampled_subset.to('cpu')]
     if sample_size == 1:
         selected_directions = [selected_directions]
-    return flattened_selected_rays, selected_pixels, selected_directions, sampled_subset.tolist()
+        selected_indices = [selected_indices]
+
+    return flattened_selected_rays, selected_pixels, selected_directions, selected_indices, sampled_subset.tolist()
 
 def collate_rendered_output(rendered_chunks: Sequence[RenderOut]) -> RenderOut:
     """Defines how a sequence of rendered_chunks can be

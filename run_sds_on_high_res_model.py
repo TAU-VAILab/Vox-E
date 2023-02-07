@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 import torch
 import wandb
+import copy
 from datetime import datetime
 from easydict import EasyDict
 from torch.backends import cudnn
@@ -101,13 +102,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=4000,
+@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=5000,
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.04,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.025,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
-@click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=400,
+@click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=5000*100,
               help="number of iterations after which lr is exponentially decayed per stage", show_default=True)
 @click.option("--lr_decay_gamma_per_stage", type=click.FLOAT, required=False, default=0.1,
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
@@ -117,7 +118,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="whether to apply the diffuse render regularization."
                    "this is a weird conjure of mine, where we ask the diffuse render "
                    "to match, as closely as possible, the GT-possibly-specular one :D"
-                   "can be off or on, on yields stabler training :) ", show_default=True)
+                   "can be off or on, on yields stabler training :) ", show_default=False)
 @click.option("--num_workers", type=click.INT, required=False, default=4,
               help="number of worker processes used for loading the data using the dataloader"
                    "note that this will be ignored if GPU-caching of the data is successful :)", show_default=True)
@@ -148,6 +149,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--directional_dataset", type=click.BOOL, required=False, default=False,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
                show_default=True)
+@click.option("--use_uncertainty", type=click.BOOL, required=False, default=False,
+              help="whether to use an uncertainty aware type loss",
+               show_default=True)
+@click.option("--new_frame_frequency", type=click.INT, required=False, default=5,
+              help="number of iterations where we work on the same pose", show_default=True)
 
 # fmt: on
 # -------------------------------------------------------------------------------------
@@ -155,7 +161,7 @@ def main(**kwargs) -> None:
     # load the requested configuration for the training
     config = EasyDict(kwargs)
 
-    wandb.init(project='VoxelArtReluFields', entity="etaisella",
+    wandb.init(project='VoxelArtReluFields v1.1', entity="etaisella",
                config=dict(config), name="test " + str(datetime.now()), 
                id=wandb.util.generate_id())
     # parse os-checked path-strings into Pathlike Paths :)
@@ -210,15 +216,18 @@ def main(**kwargs) -> None:
             )
             test_dataset = None
 
-    vox_grid_vol_mod, _ = create_volumetric_model_from_saved_model(
+    pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
         model_path=model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
         device=device,
     )
 
+    sds_vol_mod = copy.deepcopy(pretrained_vol_mod)
+
     # train the model:
     train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
-        vol_mod=vox_grid_vol_mod,
+        sds_vol_mod=sds_vol_mod,
+        pretrained_vol_mod=pretrained_vol_mod,
         train_dataset=train_dataset,
         output_dir=output_path,
         test_dataset=test_dataset,
@@ -241,7 +250,9 @@ def main(**kwargs) -> None:
         diffuse_weight=config.diffuse_weight,
         specular_weight=config.specular_weight,
         sds_prompt=config.sds_prompt,
-        directional_dataset=config.directional_dataset
+        directional_dataset=config.directional_dataset,
+        use_uncertainty=config.use_uncertainty,
+        new_frame_frequency=config.new_frame_frequency,
     )
 
 

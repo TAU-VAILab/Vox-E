@@ -6,6 +6,8 @@ from typing import Callable, Optional
 
 import imageio
 import torch
+import numpy as np
+import matplotlib.pyplot as plt
 from torch import Tensor
 from torch.nn.functional import l1_loss, mse_loss
 from torch.utils.data import DataLoader
@@ -50,7 +52,8 @@ dir_to_num_dict = {'side':0, 'overhead':1, 'back':2, 'front':3}
 
 
 def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
-    vol_mod: VolumetricModel,
+    sds_vol_mod: VolumetricModel,
+    pretrained_vol_mod: VolumetricModel,
     train_dataset: PosedImagesDataset,
     # required arguments:
     output_dir: Path,
@@ -87,6 +90,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     sds_prompt: str = "none",
     directional_dataset: bool = False,
     use_uncertainty: bool = False,
+    new_frame_frequency: int = 1,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -124,12 +128,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     Returns: the trained version of the VolumetricModel. Also writes multiple assets to disk
     """
     # assertions about the VolumetricModel being used with this TrainProcedure :)
-    assert isinstance(vol_mod.thre3d_repr, VoxelGrid), (
-        f"sorry, cannot use a {type(vol_mod.thre3d_repr)} with this TrainProcedure :(; "
+    assert isinstance(sds_vol_mod.thre3d_repr, VoxelGrid), (
+        f"sorry, cannot use a {type(sds_vol_mod.thre3d_repr)} with this TrainProcedure :(; "
         f"only a {type(VoxelGrid)} can be used"
     )
     assert (
-        vol_mod.render_procedure == render_sh_voxel_grid
+        sds_vol_mod.render_procedure == render_sh_voxel_grid
     ), f"sorry, non SH-based VoxelGrids cannot be used with this TrainProcedure"
 
     assert (
@@ -137,18 +141,14 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     ), f"sorry, you have to supply a text prompt to use SDS"
     
     # init sds loss class
-    sds_loss = scoreDistillationLoss(vol_mod.device, sds_prompt, directional=directional_dataset)
+    sds_loss = scoreDistillationLoss(sds_vol_mod.device, sds_prompt, directional=directional_dataset)
     direction_batch = None
-    selected_idxs = [0]
-
-    if use_uncertainty:
-        num_poses = len(train_dataset)
-        logvars = torch.nn.parameter(torch.zeros(num_poses, device=vol_mod.device))
+    selected_idx_in_batch = [0]
         
 
     # fix the sizes of the feature grids at different stages
     stagewise_voxel_grid_sizes = compute_thre3d_grid_sizes(
-        final_required_resolution=vol_mod.thre3d_repr.grid_dims,
+        final_required_resolution=sds_vol_mod.thre3d_repr.grid_dims,
         num_stages=num_stages,
         scale_factor=scale_factor,
     )
@@ -168,10 +168,10 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     if render_feedback_pose is None:
         feedback_dataset = test_dataset if test_dataset is not None else train_dataset
         render_feedback_pose = CameraPose(
-            rotation=feedback_dataset[0][-1][:, :3].cpu().numpy(),
-            translation=feedback_dataset[0][-1][:, 3:].cpu().numpy(),
+            rotation=feedback_dataset[-1][1][:, :3].cpu().numpy(),
+            translation=feedback_dataset[-1][1][:, 3:].cpu().numpy(),
         )
-        real_feedback_image = feedback_dataset[0][0].permute(1, 2, 0).cpu().numpy()
+        real_feedback_image = feedback_dataset[-1][0].permute(1, 2, 0).cpu().numpy()
 
     train_dl = _make_dataloader_from_dataset(
         train_dataset, image_batch_cache_size, num_workers
@@ -247,12 +247,18 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
         # setup volumetric_model's optimizer
         current_stage_lr = learning_rate * (stagewise_lr_decay_gamma ** (stage - 1))
-        optimizeable_parameters = vol_mod.thre3d_repr.parameters()
-        assert (
-            optimizeable_parameters
-        ), f"No optimizeable parameters :(. Nothing will happen"
+
+        params=[{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr},
+                {"params": pretrained_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
+                    
+        ## add logvars to optimizeable parameters if required
+        if use_uncertainty:
+            num_poses = len(train_dataset)
+            logvars = torch.nn.Parameter(torch.zeros(num_poses, device=sds_vol_mod.device))
+            params.append({{"params": logvars, "lr": current_stage_lr}})
+    
         optimizer = torch.optim.Adam(
-            params=[{"params": optimizeable_parameters, "lr": current_stage_lr}],
+            params=params,
             betas=(0.9, 0.999),
         )
 
@@ -268,7 +274,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         )
         log.info(
             f"training stage: {stage}   "
-            f"voxel grid resolution: {vol_mod.thre3d_repr.grid_dims} "
+            f"voxel grid resolution: {sds_vol_mod.thre3d_repr.grid_dims} "
             f"training images resolution: [{train_image_height} x {train_image_width}]"
         )
         current_stage_lrs = [
@@ -287,92 +293,118 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # sample a batch rays and pixels for a single iteration
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
+            total_loss = 0
             global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
 
-            if directional_dataset:
-                images, poses, dirs = next(infinite_train_dl)
-            else:
-                images, poses = next(infinite_train_dl)
+            if global_step % new_frame_frequency == 0 or global_step == 1:
+                if directional_dataset:
+                    images, poses, dirs, indices = next(infinite_train_dl)
+                else:
+                    images, poses, indices = next(infinite_train_dl)
 
-            # cast rays for all the loaded images:
-            rays_list = []
-            unflattened_rays_list = []
-            for pose in poses:
-                unflattened_rays = cast_rays(
-                        current_stage_train_dataset.camera_intrinsics,
-                        CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
-                        device=vol_mod.device,
+                # cast rays for all the loaded images:
+                rays_list = []
+                unflattened_rays_list = []
+                for pose in poses:
+                    unflattened_rays = cast_rays(
+                            current_stage_train_dataset.camera_intrinsics,
+                            CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
+                            device=sds_vol_mod.device,
+                        )
+                    casted_rays = flatten_rays(unflattened_rays)
+                    rays_list.append(casted_rays)
+                    unflattened_rays_list.append(unflattened_rays)
+
+                unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
+
+                # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
+                pixels = (
+                    images.permute(0, 2, 3, 1)
+                    .reshape(-1, images.shape[1])
+                    .to(sds_vol_mod.device)
+                )
+                _, _, im_h, im_w = images.shape
+
+                # sample a subset of rays and pixels synchronously
+                batch_size_in_images = int(ray_batch_size / (im_h * im_w))
+                if directional_dataset:
+                    rays_batch, pixels_batch, direction_batch, index_batch, selected_idx_in_batch = sample_rays_directions_and_pixels_synchronously(
+                        unflattened_rays, images, dirs, indices, batch_size_in_images
                     )
-                casted_rays = flatten_rays(unflattened_rays)
-                rays_list.append(casted_rays)
-                unflattened_rays_list.append(unflattened_rays)
+                else:
+                    rays_batch, pixels_batch, index_batch = sample_rays_and_pixels_synchronously(
+                        unflattened_rays, images, indices, batch_size_in_images
+                    )
 
-            unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
-
-            # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
-            pixels = (
-                images.permute(0, 2, 3, 1)
-                .reshape(-1, images.shape[1])
-                .to(vol_mod.device)
-            )
-            _, _, im_h, im_w = images.shape
-
-            # sample a subset of rays and pixels synchronously
-            batch_size_in_images = int(ray_batch_size / (im_h * im_w))
-            if directional_dataset:
-                rays_batch, pixels_batch, direction_batch, selected_idxs = sample_rays_directions_and_pixels_synchronously(
-                    unflattened_rays, images, dirs, batch_size_in_images
-                )
-            else:
-                rays_batch, pixels_batch = sample_rays_and_pixels_synchronously(
-                    unflattened_rays, images, batch_size_in_images
-                )
-
-            # log inputs
-            wandb.log({"Input Image": wandb.Image(images[selected_idxs[0]])}, step=global_step)
-            if directional_dataset:
-                wandb.log({"Input Direction": dir_to_num_dict[dirs[selected_idxs[0]]]}, step=global_step)
+                # log inputs
+                wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
+                if directional_dataset:
+                    wandb.log({"Input Direction": dir_to_num_dict[dirs[selected_idx_in_batch[0]]]}, step=global_step)
 
             # render a small chunk of rays and compute a loss on it
-            specular_rendered_batch = vol_mod.render_rays(rays_batch)
-            specular_rendered_pixels_batch = specular_rendered_batch.colour
+            specular_rendered_batch_sds = sds_vol_mod.render_rays(rays_batch)
+            specular_rendered_pixels_batch_sds = specular_rendered_batch_sds.colour
+            specular_rendered_batch_pretrained = pretrained_vol_mod.render_rays(rays_batch)
+            specular_rendered_pixels_batch_pretrained = specular_rendered_batch_pretrained.colour
 
             # run sds loss training step!
-            sds_loss.training_step(specular_rendered_batch.colour, im_h, im_w, direction_batch)
+            if use_uncertainty:
+                logvars_batch = logvars[index_batch]
+                total_loss = total_loss + torch.mean(logvars_batch)
+            else:
+                logvars_batch = None
+
+            total_loss = total_loss + sds_loss.training_step(specular_rendered_pixels_batch_sds,
+                                                             im_h, im_w, 
+                                                             directions=direction_batch, 
+                                                             logvars=logvars_batch)
 
             # compute loss and perform gradient update
             # Main, specular loss
-            total_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch) * specular_weight
+            specular_loss_value = l1_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
+            total_loss = total_loss + specular_loss_value * specular_weight
 
             # logging info:
-            specular_loss_value = total_loss
             specular_psnr_value = mse2psnr(
-                mse_loss(specular_rendered_pixels_batch, pixels_batch)
+                mse_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
             )
 
             # Diffuse render loss, for better and stabler geometry extraction if requested:
-            diffuse_loss_value, diffuse_psnr_value = None, None
+            diffuse_loss_value, diffuse_psnr_value = 0, 0
             if apply_diffuse_render_regularization:
                 # render only the diffuse version for the rays
-                diffuse_rendered_batch = vol_mod.render_rays(
+                diffuse_rendered_batch_pretrained = pretrained_vol_mod.render_rays(
                     rays_batch, render_diffuse=True
                 )
-                diffuse_rendered_pixels_batch = diffuse_rendered_batch.colour
+                diffuse_rendered_pixels_batch_pretrained = diffuse_rendered_batch_pretrained.colour
 
                 # compute diffuse loss
-                diffuse_loss = l1_loss(diffuse_rendered_pixels_batch, pixels_batch)
+                diffuse_loss = l1_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
                 total_loss = total_loss + diffuse_loss * diffuse_weight
 
                 # logging info:
                 diffuse_loss_value = diffuse_loss
                 diffuse_psnr_value = mse2psnr(
-                    mse_loss(diffuse_rendered_pixels_batch, pixels_batch)
+                    mse_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
                 )
+
+            # insert loss that ties them togethere here:
 
             # optimization steps:
             total_loss.backward()
             optimizer.step()
             optimizer.zero_grad()
+
+            # wandb logging:
+            if use_uncertainty:
+                _log_variances_in_wandb(logvars, global_step)
+            wandb.log({"specular_loss" : specular_loss_value}, step=global_step)
+            wandb.log({"diffuse_loss" : diffuse_loss_value}, step=global_step)
+            wandb.log({"specular_psnr" : specular_psnr_value}, step=global_step)
+            wandb.log({"diffuse_psnr" : diffuse_psnr_value}, step=global_step)
+            wandb.log({"total_loss" : total_loss}, step=global_step)
+            wandb.log({"first selected indx in batch" : index_batch[0]}, step=global_step)
+
             # ---------------------------------------------------------------------------------
 
             # rest of the code per iteration is related to saving/logging/feedback/testing
@@ -411,11 +443,13 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"specular_loss: {specular_loss_value.item(): .3f} "
                     f"specular_psnr: {specular_psnr_value.item(): .3f} "
                 )
+                
+                diff_val = diffuse_loss_value.detach().item()
                 if apply_diffuse_render_regularization:
                     loss_info_string += (
-                        f"diffuse_loss: {diffuse_loss_value.item(): .3f} "
+                        f"diffuse_loss: {diff_val: .3f} "
                         f"diffuse_psnr: {diffuse_psnr_value.item(): .3f} "
-                        f"total_loss: {total_loss: .3f} "
+                        f"total_loss: {total_loss.item(): .3f} "
                     )
                 log.info(loss_info_string)
 
@@ -437,16 +471,32 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"till now: {timedelta(seconds=time_spent_actually_training)}"
                 )
                 visualize_sh_vox_grid_vol_mod_rendered_feedback(
-                    vol_mod=vol_mod,
+                    vol_mod=sds_vol_mod,
+                    vol_mod_name="sds",
                     render_feedback_pose=render_feedback_pose,
                     camera_intrinsics=camera_intrinsics,
                     global_step=global_step,
                     feedback_logs_dir=render_dir,
-                    parallel_rays_chunk_size=vol_mod.render_config.parallel_rays_chunk_size,
+                    parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
                     training_time=time_spent_actually_training,
                     log_diffuse_rendered_version=True,
                     use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
-                    overridden_num_samples_per_ray=vol_mod.render_config.render_num_samples_per_ray,
+                    overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
+                    verbose_rendering=verbose_rendering,
+                )
+
+                visualize_sh_vox_grid_vol_mod_rendered_feedback(
+                    vol_mod=pretrained_vol_mod,
+                    vol_mod_name="pretrained",
+                    render_feedback_pose=render_feedback_pose,
+                    camera_intrinsics=camera_intrinsics,
+                    global_step=global_step,
+                    feedback_logs_dir=render_dir,
+                    parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
+                    training_time=time_spent_actually_training,
+                    log_diffuse_rendered_version=True,
+                    use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+                    overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
                     verbose_rendering=verbose_rendering,
                 )
 
@@ -460,7 +510,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 )
             ):
                 test_sh_vox_grid_vol_mod_with_posed_images(
-                    vol_mod=vol_mod,
+                    vol_mod=sds_vol_mod,
                     test_dl=test_dl,
                     parallel_rays_chunk_size=ray_batch_size,
                     tensorboard_writer=tensorboard_writer,
@@ -477,7 +527,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"saving model-snapshot at stage {stage}, global step {global_step}"
                 )
                 torch.save(
-                    vol_mod.get_save_info(
+                    sds_vol_mod.get_save_info(
                         extra_info={
                             CAMERA_BOUNDS: camera_bounds,
                             CAMERA_INTRINSICS: camera_intrinsics,
@@ -497,8 +547,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # upsample the feature-grid after the completion of the stage:
             with torch.no_grad():
                 # noinspection PyTypeChecker
-                vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
-                    vol_mod.thre3d_repr,
+                sds_vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
+                    sds_vol_mod.thre3d_repr,
                     output_size=stagewise_voxel_grid_sizes[stage],
                     mode="trilinear",
                 )
@@ -507,7 +557,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     # save the final trained model
     log.info(f"Saving the final model-snapshot :)! Almost there ... yay!")
     torch.save(
-        vol_mod.get_save_info(
+        sds_vol_mod.get_save_info(
             extra_info={
                 "camera_bounds": camera_bounds,
                 "camera_intrinsics": camera_intrinsics,
@@ -522,7 +572,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     log.info(
         f"Total actual training time: {timedelta(seconds=time_spent_actually_training)}"
     )
-    return vol_mod
+    return sds_vol_mod
 
 
 def _make_dataloader_from_dataset(
@@ -546,3 +596,18 @@ def _make_dataloader_from_dataset(
         else 2,
         persistent_workers=not dataset.cached_data_mode and num_workers > 0,
     )
+
+def _log_variances_in_wandb(logvars, global_step):
+    logvars_toplot = logvars.cpu().detach().numpy()
+    variances = np.exp(logvars_toplot)
+    indices = np.arange(variances.shape[0])
+    fig = plt.figure(figsize=(5, 2.5), dpi=300)
+    plt.bar(indices, variances)
+    plt.title(f"Variance per Pose at step {global_step}")
+    plt.xlabel("Pose index")
+    plt.ylabel("Variance")
+    plt.tight_layout()
+    wandb.log({"Variances per Pose": wandb.Image(plt)}, step=global_step)
+    plt.close(fig)
+    
+

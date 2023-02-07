@@ -156,8 +156,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     if render_feedback_pose is None:
         feedback_dataset = test_dataset if test_dataset is not None else train_dataset
         render_feedback_pose = CameraPose(
-            rotation=feedback_dataset[0][-1][:, :3].cpu().numpy(),
-            translation=feedback_dataset[0][-1][:, 3:].cpu().numpy(),
+            rotation=feedback_dataset[0][1][:, :3].cpu().numpy(),
+            translation=feedback_dataset[0][1][:, 3:].cpu().numpy(),
         )
         real_feedback_image = feedback_dataset[0][0].permute(1, 2, 0).cpu().numpy()
 

@@ -24,7 +24,7 @@ def test_sh_vox_grid_vol_mod_with_posed_images(
     log.info(f"Testing the model on {len(test_dl)} heldout images")
     all_psnrs, all_lpips = [], []
     vgg_lpips_computer = lpips.LPIPS(net="vgg").to(vol_mod.device)
-    for (image, pose) in tqdm(test_dl):
+    for (image, pose, _) in tqdm(test_dl):
         image, pose = image[0], pose[0]  # testing batching is always 1
         # noinspection PyUnresolvedReferences
         rendered_output = vol_mod.render(

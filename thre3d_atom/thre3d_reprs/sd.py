@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import time
+from torch.cuda.amp import custom_bwd, custom_fwd
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -16,8 +17,31 @@ def seed_everything(seed):
     #torch.backends.cudnn.deterministic = True
     #torch.backends.cudnn.benchmark = True
 
+class SpecifyGradient(torch.autograd.Function):
+    @staticmethod
+    @custom_fwd
+    def forward(ctx, input_tensor, gt_grad):
+        ctx.save_for_backward(gt_grad) 
+        
+        # dummy loss value
+        return torch.zeros([1], device=input_tensor.device, dtype=input_tensor.dtype)
+
+    @staticmethod
+    @custom_bwd
+    def backward(ctx, grad):
+        gt_grad, = ctx.saved_tensors
+        batch_size = len(gt_grad)
+        return gt_grad / batch_size, None
+
+def seed_everything(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    #torch.backends.cudnn.deterministic = True
+    #torch.backends.cudnn.benchmark = True
+
+
 class StableDiffusion(nn.Module):
-    def __init__(self, device, sd_version='2.0', hf_key=None):
+    def __init__(self, device, sd_version='2.1', hf_key=None):
         super().__init__()
 
         self.device = device
@@ -28,6 +52,8 @@ class StableDiffusion(nn.Module):
         if hf_key is not None:
             print(f'[INFO] using hugging face custom model key: {hf_key}')
             model_key = hf_key
+        elif self.sd_version == '2.1':
+            model_key = "stabilityai/stable-diffusion-2-1-base"
         elif self.sd_version == '2.0':
             model_key = "stabilityai/stable-diffusion-2-base"
         elif self.sd_version == '1.5':
@@ -71,8 +97,7 @@ class StableDiffusion(nn.Module):
         return text_embeddings
 
 
-    def train_step(self, text_embeddings, pred_rgb, guidance_scale=100):
-        
+    def train_step(self, text_embeddings, pred_rgb, guidance_scale=100, logvar=None):
         # interp to 512x512 to be fed into vae.
 
         # _t = time.time()
@@ -111,12 +136,15 @@ class StableDiffusion(nn.Module):
         # grad = grad.clamp(-10, 10)
         grad = torch.nan_to_num(grad)
 
-        # manually backward, since we omitted an item in grad and cannot simply autodiff.
+        if logvar != None:
+            grad = grad * torch.exp(-1 * logvar)
+
+        # since we omitted an item in grad, we need to use the custom function to specify the gradient
         # _t = time.time()
-        latents.backward(gradient=grad, retain_graph=True)
+        loss = SpecifyGradient.apply(latents, grad) 
         # torch.cuda.synchronize(); print(f'[TIME] guiding: backward {time.time() - _t:.4f}s')
 
-        return 0 # dummy loss value
+        return loss 
 
     def produce_latents(self, text_embeddings, height=512, width=512, num_inference_steps=50, guidance_scale=7.5, latents=None):
 
@@ -225,6 +253,7 @@ class scoreDistillationLoss(nn.Module):
         self.directional = directional
         # get sd model
         self.sd_model = StableDiffusion(device,"2.0", hf_key="Fictiverse/Stable_Diffusion_VoxelArt_Model")
+        #self.sd_model = StableDiffusion(device)
 
         # encode text
         if directional:
@@ -236,7 +265,8 @@ class scoreDistillationLoss(nn.Module):
         else:
             self.text_encoding = self.sd_model.get_text_embeds(prompt, '')
     
-    def training_step(self, output, image_height, image_width, directions=None):
+    def training_step(self, output, image_height, image_width, directions=None, logvars=None):
+        loss = 0
         if self.directional:
             assert (directions != None), f"Must supply direction if SDS loss is set to directional mode"
         # format output images
@@ -245,10 +275,16 @@ class scoreDistillationLoss(nn.Module):
 
         # perform training step
         if not self.directional:
-            self.sd_model.train_step(self.text_encoding, out_imgs)
+            loss = self.sd_model.train_step(self.text_encoding, out_imgs, logvar=logvars)
         else:
-            for dir_prompt in directions:
+            for idx, dir_prompt in enumerate(directions):
+                if logvars != None:
+                    logvar = logvars[idx]
+                else:
+                    logvar = None
                 encoding = self.text_encodings[dir_prompt]
-                self.sd_model.train_step(encoding, out_imgs)
+                loss = loss + self.sd_model.train_step(encoding, out_imgs, logvar=logvar)
+        
+        return loss
 
 

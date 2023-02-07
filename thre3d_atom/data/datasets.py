@@ -385,6 +385,6 @@ class PosedImagesDataset(torch_data.Dataset):
 
         # return the image and it's camera pose
         if self.directional:
-            return image, unified_pose, direction
+            return image, unified_pose, direction, index
 
-        return image, unified_pose
+        return image, unified_pose, index
