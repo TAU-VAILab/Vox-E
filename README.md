@@ -1,5 +1,8 @@
 # SDSReluFields
 
+## Concept:
+![Graph](https://ibb.co/KNWXzhj "Flow:")
+
 ## Getting the Repo:
     git clone https://github.com/etaisella/voxelArtReluFields.git
     cd voxelArtReluFields
