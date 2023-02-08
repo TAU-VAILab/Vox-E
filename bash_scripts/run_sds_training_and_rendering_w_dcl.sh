@@ -36,10 +36,26 @@ train_and_render() {
 
 # STARTING RUN:
 
-scene=lego
-prompt="a render of a yellow bulldozer made of playdough"
+scene=dog2
+prompt="a render of a cute light grey dog in VoxelArt style"
 directional=False
-log_name="playdough" # 1-word description of the prompt for saving
-dcl_weight=100.0
+log_name="VoxelArt" # 1-word description of the prompt for saving
+dcl_weight=50.0
+
+train_and_render $scene "$prompt" $directional $log_name $dcl_weight
+
+scene=frog
+prompt="a render of a frog in VoxelArt style"
+directional=False
+log_name="VoxelArt" # 1-word description of the prompt for saving
+dcl_weight=50.0
+
+train_and_render $scene "$prompt" $directional $log_name $dcl_weight
+
+scene=lego
+prompt="a render of a yellow bulldozer in VoxelArt style"
+directional=False
+log_name="VoxelArt" # 1-word description of the prompt for saving
+dcl_weight=50.0
 
 train_and_render $scene "$prompt" $directional $log_name $dcl_weight
