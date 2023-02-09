@@ -298,10 +298,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
 
             if global_step % new_frame_frequency == 0 or global_step == 1:
-                if directional_dataset:
-                    images, poses, dirs, indices = next(infinite_train_dl)
-                else:
-                    images, poses, indices = next(infinite_train_dl)
+                images, poses, indices = next(infinite_train_dl)
 
                 # cast rays for all the loaded images:
                 rays_list = []
@@ -328,19 +325,15 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
                 # sample a subset of rays and pixels synchronously
                 batch_size_in_images = int(ray_batch_size / (im_h * im_w))
-                if directional_dataset:
-                    rays_batch, pixels_batch, direction_batch, index_batch, selected_idx_in_batch = sample_rays_directions_and_pixels_synchronously(
-                        unflattened_rays, images, dirs, indices, batch_size_in_images
-                    )
-                else:
-                    rays_batch, pixels_batch, index_batch = sample_rays_and_pixels_synchronously(
+                rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
                         unflattened_rays, images, indices, batch_size_in_images
                     )
 
                 # log inputs
                 wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
                 if directional_dataset:
-                    wandb.log({"Input Direction": dir_to_num_dict[dirs[selected_idx_in_batch[0]]]}, step=global_step)
+                    direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
+                    wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
 
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch_sds = sds_vol_mod.render_rays(rays_batch)
@@ -639,5 +632,31 @@ def _density_correlation_loss(sds_vol_mod: VolumetricModel,
     # Return Result:
     correlation = covariance / (denominator + eps)
     return 1.0 - correlation
-    
 
+def _get_dir_batch_from_poses(poses: Tensor):
+    dir_batch = []
+    num_poses = poses.shape[0]
+    for i in range(num_poses):
+        Rt = poses[i]
+        pitch, yaw = _pitch_yaw_from_Rt(Rt)
+
+        # determine view direction according to pitch, yaw
+        dir = 'front'
+        if yaw > 60.0:
+            dir = 'side'
+        if yaw > 120.0:
+            dir = 'back'
+        if pitch > 55.0:
+            dir = 'overhead'
+        
+        dir_batch.append(dir)
+    
+    return dir_batch
+        
+def _pitch_yaw_from_Rt(rotation: Tensor):
+    #pitch = np.arccos(rotation[1, 1].cpu().numpy()) * 180.0 / np.pi
+    tx, ty, tz = rotation[:,-1].cpu().numpy()
+    tr = np.sqrt(tx**2 + ty**2)
+    pitch = np.arctan(tz / tr) * 180 / np.pi
+    yaw = np.arccos(rotation[0, 0].cpu().numpy()) * 180.0 / np.pi
+    return pitch, yaw

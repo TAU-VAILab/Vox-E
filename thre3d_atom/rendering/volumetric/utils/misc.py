@@ -155,7 +155,7 @@ def sample_rays_and_pixels_synchronously(
     if sample_size == 1:
         selected_indices = [selected_indices]
     selected_pixels = selected_pixels.permute(0, 2, 3, 1).reshape(-1, pixels.shape[1])
-    return flattened_selected_rays, selected_pixels, selected_indices
+    return flattened_selected_rays, selected_pixels, selected_indices, sampled_subset.tolist()
 
 def sample_rays_directions_and_pixels_synchronously(
     rays: Rays,

@@ -174,48 +174,26 @@ def main(**kwargs) -> None:
     log.info("logging configuration file ...")
     log_config_to_disk(config, output_path)
 
-    # create a datasets for training and testing:
-    if config.directional_dataset:
-        train_dataset = (
+    if config.separate_train_test_folders:
+        train_dataset, test_dataset = (
             PosedImagesDataset(
-                images_dir=data_path / "touchup",
-                camera_params_json=data_path / f"touchup_camera_params.json",
-                normalize_scene_scale=config.normalize_scene_scale,
-                downsample_factor=config.data_downsample_factor,
-                rgba_white_bkgd=config.white_bkgd,
-                directional=True
-            )
-        )
-        test_dataset = (
-            PosedImagesDataset(
-                images_dir=data_path / "test",
-                camera_params_json=data_path / f"test_camera_params.json",
+                images_dir=data_path / mode,
+                camera_params_json=data_path / f"{mode}_camera_params.json",
                 normalize_scene_scale=config.normalize_scene_scale,
                 downsample_factor=config.data_downsample_factor,
                 rgba_white_bkgd=config.white_bkgd,
             )
+            for mode in ("train", "test")
         )
     else:
-        if config.separate_train_test_folders:
-            train_dataset, test_dataset = (
-                PosedImagesDataset(
-                    images_dir=data_path / mode,
-                    camera_params_json=data_path / f"{mode}_camera_params.json",
-                    normalize_scene_scale=config.normalize_scene_scale,
-                    downsample_factor=config.data_downsample_factor,
-                    rgba_white_bkgd=config.white_bkgd,
-                )
-                for mode in ("train", "test")
-            )
-        else:
-            train_dataset = PosedImagesDataset(
-                images_dir=data_path / "images",
-                camera_params_json=data_path / "camera_params.json",
-                normalize_scene_scale=config.normalize_scene_scale,
-                downsample_factor=config.data_downsample_factor,
-                rgba_white_bkgd=config.white_bkgd,
-            )
-            test_dataset = None
+        train_dataset = PosedImagesDataset(
+            images_dir=data_path / "images",
+            camera_params_json=data_path / "camera_params.json",
+            normalize_scene_scale=config.normalize_scene_scale,
+            downsample_factor=config.data_downsample_factor,
+            rgba_white_bkgd=config.white_bkgd,
+        )
+        test_dataset = None
 
     pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
         model_path=model_path,
