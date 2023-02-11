@@ -317,11 +317,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
 
                 # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
-                pixels = (
-                    images.permute(0, 2, 3, 1)
-                    .reshape(-1, images.shape[1])
-                    .to(sds_vol_mod.device)
-                )
                 _, _, im_h, im_w = images.shape
 
                 # sample a subset of rays and pixels synchronously
@@ -334,6 +329,25 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
                 if directional_dataset:
                     direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
+                    #while direction_batch[0] != 'front' and direction_batch[0] != 'overhead':
+                    #    images, poses, indices = next(infinite_train_dl)
+                    #    rays_list = []
+                    #    unflattened_rays_list = []
+                    #    for pose in poses:
+                    #        unflattened_rays = cast_rays(
+                    #                current_stage_train_dataset.camera_intrinsics,
+                    #                CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
+                    #                device=sds_vol_mod.device,
+                    #            )
+                    #        casted_rays = flatten_rays(unflattened_rays)
+                    #        rays_list.append(casted_rays)
+                    #        unflattened_rays_list.append(unflattened_rays)
+
+                    #    unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
+                    #    rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
+                    #            unflattened_rays, images, indices, batch_size_in_images
+                    #    )
+                    #    direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
                     wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
 
             # render a small chunk of rays and compute a loss on it
@@ -473,6 +487,11 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"till now: {timedelta(seconds=time_spent_actually_training)}"
                 )
                 with torch.no_grad():
+                    render_feedback_pose = CameraPose(
+                        rotation=train_dataset[index_batch[0]][1][:, :3].cpu().numpy(),
+                        translation=train_dataset[index_batch[0]][1][:, 3:].cpu().numpy(),
+                    )
+
                     visualize_sh_vox_grid_vol_mod_rendered_feedback(
                         vol_mod=sds_vol_mod,
                         vol_mod_name="sds",
@@ -502,6 +521,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                         use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
                         overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
                         verbose_rendering=verbose_rendering,
+                        log_wandb=True,
                     )
 
             # obtain and log the test metrics

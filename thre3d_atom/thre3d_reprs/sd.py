@@ -252,8 +252,8 @@ class scoreDistillationLoss(nn.Module):
         self.dir_to_indx_dict = {}
         self.directional = directional
         # get sd model
-        self.sd_model = StableDiffusion(device,"2.0", hf_key="Fictiverse/Stable_Diffusion_VoxelArt_Model")
-        #self.sd_model = StableDiffusion(device)
+        #self.sd_model = StableDiffusion(device,"2.0", hf_key="Fictiverse/Stable_Diffusion_VoxelArt_Model")
+        self.sd_model = StableDiffusion(device, "2.0")
 
         # encode text
         if directional:
