@@ -162,7 +162,7 @@ def main(**kwargs) -> None:
     # load the requested configuration for the training
     config = EasyDict(kwargs)
 
-    wandb.init(project='VoxelArtReluFields v1.1', entity="etaisella",
+    wandb.init(project='VoxelArtReluFields v1.1', entity="galf",
                config=dict(config), name="test " + str(datetime.now()), 
                id=wandb.util.generate_id())
     # parse os-checked path-strings into Pathlike Paths :)

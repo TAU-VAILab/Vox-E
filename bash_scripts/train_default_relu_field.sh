@@ -19,8 +19,8 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 train_default() {
 	# Train:
 	echo "Starting Training..."
-	python train_sh_based_voxel_grid_with_posed_images.py -d ../data/${1}/ \
-	-o logs/rf/high_res_${1}_diffuse/ \
+	python train_sh_based_voxel_grid_with_posed_images.py -d ./data/${1}/ \
+	-o ./logs/rf/high_res_${1}_diffuse/ \
 	--sh_degree=0 # we currently only support diffuse
 }
 

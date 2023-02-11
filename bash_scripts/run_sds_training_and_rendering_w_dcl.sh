@@ -19,19 +19,21 @@ train_and_render() {
 	# Train:
 	echo "Starting Training..."
 	python run_sds_on_high_res_model.py \
-	-d ../data/${1}/ \
-	-o logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}/ \
-	-i logs/rf/high_res_${1}_diffuse/saved_models/model_final.pth \
+	-d ./data/${1}/ \
+	-o ./logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}/ \
+	-i ./logs/rf/high_res_${1}_diffuse/saved_models/model_final.pth \
 	-p "$2" \
 	--directional_dataset=${3} \
 	--density_correlation_weight=${5} \
 	--sh_degree=0 # we currently only support diffuse
+	--apply_diffuse_render_regularization=False
+	--specular_weight=0
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
 	python render_sh_based_voxel_grid.py \
-	-i logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}/saved_models/model_final.pth \
-	-o output_renders/${1}_sds_dir_${3}_dcl_${5}_${4}
+	-i ./logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}/saved_models/model_final.pth \
+	-o ./output_renders/${1}_sds_dir_${3}_dcl_${5}_${4}
 }
 
 # STARTING RUN:
