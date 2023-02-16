@@ -94,6 +94,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         use_uncertainty: bool = False,
         new_frame_frequency: int = 1,
         density_correlation_weight: float = 0.0,
+        l1: bool = False,
+        dcl: bool = False,
+        avg: bool = False,
+        two_way: bool = False,
+        lbo: bool = False,
+        weight_schedule: bool = False
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -250,8 +256,11 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         # setup volumetric_model's optimizer
         current_stage_lr = learning_rate * (stagewise_lr_decay_gamma ** (stage - 1))
 
-        params = [{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr},
-                  {"params": pretrained_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
+        if lbo:
+            params = [{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
+        else:
+            params = [{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr},
+                      {"params": pretrained_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
 
         ## add logvars to optimizeable parameters if required
         if use_uncertainty:
@@ -298,6 +307,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             total_loss = 0
             global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
 
+            if weight_schedule and global_step % 1000 == 0:
+                density_correlation_weight *= 10
             if global_step % new_frame_frequency == 0 or global_step == 1:
                 images, poses, indices = next(infinite_train_dl)
 
@@ -329,7 +340,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
                 if directional_dataset:
                     direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
-                    #while direction_batch[0] != 'front' and direction_batch[0] != 'overhead':
+                    # while direction_batch[0] != 'front' and direction_batch[0] != 'overhead':
                     #    images, poses, indices = next(infinite_train_dl)
                     #    rays_list = []
                     #    unflattened_rays_list = []
@@ -353,8 +364,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch_sds = sds_vol_mod.render_rays(rays_batch)
             specular_rendered_pixels_batch_sds = specular_rendered_batch_sds.colour
-            specular_rendered_batch_pretrained = pretrained_vol_mod.render_rays(rays_batch)
-            specular_rendered_pixels_batch_pretrained = specular_rendered_batch_pretrained.colour
+            if not lbo:
+                specular_rendered_batch_pretrained = pretrained_vol_mod.render_rays(rays_batch)
+                specular_rendered_pixels_batch_pretrained = specular_rendered_batch_pretrained.colour
 
             # run sds loss training step!
             if use_uncertainty:
@@ -370,39 +382,56 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
             # compute loss and perform gradient update
             # Main, specular loss
-            specular_loss_value = l1_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
-            total_loss = total_loss + specular_loss_value * specular_weight
-
-            # logging info:
-            specular_psnr_value = mse2psnr(
-                mse_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
-            )
-
-            # Diffuse render loss, for better and stabler geometry extraction if requested:
-            diffuse_loss_value, diffuse_psnr_value = 0, 0
-            if apply_diffuse_render_regularization:
-                # render only the diffuse version for the rays
-                diffuse_rendered_batch_pretrained = pretrained_vol_mod.render_rays(
-                    rays_batch, render_diffuse=True
-                )
-                diffuse_rendered_pixels_batch_pretrained = diffuse_rendered_batch_pretrained.colour
-
-                # compute diffuse loss
-                diffuse_loss = l1_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
-                total_loss = total_loss + diffuse_loss * diffuse_weight
+            specular_loss_value = 0
+            diffuse_loss_value = 0
+            specular_psnr_value = 0
+            diffuse_psnr_value = 0
+            if not lbo:
+                specular_loss_value = l1_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
+                total_loss = total_loss + specular_loss_value * specular_weight
 
                 # logging info:
-                diffuse_loss_value = diffuse_loss
-                diffuse_psnr_value = mse2psnr(
-                    mse_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
+                specular_psnr_value = mse2psnr(
+                    mse_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
                 )
+
+                # Diffuse render loss, for better and stabler geometry extraction if requested:
+                diffuse_loss_value, diffuse_psnr_value = 0, 0
+                if apply_diffuse_render_regularization:
+                    # render only the diffuse version for the rays
+                    diffuse_rendered_batch_pretrained = pretrained_vol_mod.render_rays(
+                        rays_batch, render_diffuse=True
+                    )
+                    diffuse_rendered_pixels_batch_pretrained = diffuse_rendered_batch_pretrained.colour
+
+                    # compute diffuse loss
+                    diffuse_loss = l1_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
+                    total_loss = total_loss + diffuse_loss * diffuse_weight
+
+                    # logging info:
+                    diffuse_loss_value = diffuse_loss
+                    diffuse_psnr_value = mse2psnr(
+                        mse_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
+                    )
 
             ### insert losses that tie them together here ###
             density_correlation_loss = 0.0
             if density_correlation_weight != 0.0:
-                density_correlation_loss = _density_correlation_loss(sds_vol_mod=sds_vol_mod,
-                                                                     regular_vol_mod=pretrained_vol_mod)
-                total_loss = total_loss + density_correlation_loss * density_correlation_weight
+                # density_correlation_loss = _density_correlation_loss(sds_vol_mod=sds_vol_mod,
+                #                                                      regular_vol_mod=pretrained_vol_mod)
+                if avg:
+                    if l1:
+                        l1d = l1_loss(sds_vol_mod.thre3d_repr._densities,
+                                      pretrained_vol_mod.thre3d_repr._densities.detach())
+                        l1c = l1_loss(sds_vol_mod.thre3d_repr._features,
+                                      pretrained_vol_mod.thre3d_repr._features.detach())
+                        total_loss = total_loss + ((l1c + l1d) / 2) * density_correlation_weight
+                else:
+                    if dcl:
+                        density_correlation_loss = _density_correlation_loss(sds_vol_mod=sds_vol_mod,
+                                                                             regular_vol_mod=pretrained_vol_mod,
+                                                                             two_way=two_way)
+                        total_loss = total_loss + density_correlation_loss * density_correlation_weight
 
             # optimization steps:
             total_loss.backward()
@@ -412,13 +441,21 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # wandb logging:
             if use_uncertainty:
                 _log_variances_in_wandb(logvars, global_step)
-            wandb.log({"specular_loss": specular_loss_value}, step=global_step)
-            wandb.log({"diffuse_loss": diffuse_loss_value}, step=global_step)
-            wandb.log(
-                {"density_correlation_loss": density_correlation_loss.item() if density_correlation_weight != 0 else 0},
-                step=global_step)
-            wandb.log({"specular_psnr": specular_psnr_value}, step=global_step)
-            wandb.log({"diffuse_psnr": diffuse_psnr_value}, step=global_step)
+            if not lbo:
+                wandb.log({"specular_loss": specular_loss_value}, step=global_step)
+                wandb.log({"diffuse_loss": diffuse_loss_value}, step=global_step)
+            # wandb.log(
+            #     {"density_correlation_loss": density_correlation_loss.item() if density_correlation_weight != 0 else 0},
+            #     step=global_step)
+            if avg:
+                if l1:
+                    wandb.log({"avg_loss": (l1d + l1c / 2)}, step=global_step)
+            else:
+                if dcl:
+                    wandb.log({"dcl_loss": density_correlation_loss}, step=global_step)
+            if not lbo:
+                wandb.log({"specular_psnr": specular_psnr_value}, step=global_step)
+                wandb.log({"diffuse_psnr": diffuse_psnr_value}, step=global_step)
             wandb.log({"total_loss": total_loss}, step=global_step)
             wandb.log({"first selected indx in batch": index_batch[0]}, step=global_step)
 
@@ -456,15 +493,15 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"Stage: {stage} "
                     f"Global Iteration: {global_step} "
                     f"Stage Iteration: {stage_iteration} "
-                    f"specular_loss: {specular_loss_value.item(): .3f} "
-                    f"specular_psnr: {specular_psnr_value.item(): .3f} "
+                    f"specular_loss: {specular_loss_value.item() if not lbo else 0: .3f} "
+                    f"specular_psnr: {specular_psnr_value.item() if not lbo else 0: .3f} "
                 )
 
-                diff_val = diffuse_loss_value.detach().item()
+                diff_val = diffuse_loss_value.detach().item() if not lbo else 0
                 if apply_diffuse_render_regularization:
                     loss_info_string += (
-                        f"diffuse_loss: {diff_val: .3f} "
-                        f"diffuse_psnr: {diffuse_psnr_value.item(): .3f} "
+                        f"diffuse_loss: {diff_val if not lbo else 0: .3f} "
+                        f"diffuse_psnr: {diffuse_psnr_value.item() if not lbo else 0: .3f} "
                         f"total_loss: {total_loss.item(): .3f} "
                     )
                 log.info(loss_info_string)
@@ -637,12 +674,15 @@ def _log_variances_in_wandb(logvars, global_step):
 
 
 def _density_correlation_loss(sds_vol_mod: VolumetricModel,
-                              regular_vol_mod: VolumetricModel):
+                              regular_vol_mod: VolumetricModel, two_way=False):
     eps = 0.0000001  # for numerical stability
 
     # Get densities (currently detach regular density):
     sds_density = sds_vol_mod.thre3d_repr._densities
-    regular_density = regular_vol_mod.thre3d_repr._densities.detach()
+    if not two_way:
+        regular_density = regular_vol_mod.thre3d_repr._densities.detach()
+    else:
+        regular_density = regular_vol_mod.thre3d_repr._densities
 
     # Calculate Denominator:
     sds_var = torch.mean((sds_density - torch.mean(sds_density)) ** 2)

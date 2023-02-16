@@ -25,7 +25,9 @@ train_and_render() {
 	-p "$2" \
 	--directional_dataset=${3} \
 	--density_correlation_weight=${5} \
-	--sh_degree=0 # we currently only support diffuse
+	--sh_degree=0 \
+	--dcl=True \
+	--lbo=True
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
@@ -34,92 +36,23 @@ train_and_render() {
 	-o ./output_renders/${1}_sds_dir_${3}_dcl_${5}_${4}
 }
 
+
 # STARTING RUN:
 
 scene=dog2
 prompt="a render of a cute light gray dog wearing sunglasses"
 directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=0.1
+log_name="high_res_sunglasses" # 1-word description of the prompt for saving
+dcl_weight=1000000
 
 train_and_render $scene "$prompt" $directional $log_name $dcl_weight
 
 scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
+prompt="a yarn doll of a cute light gray dog high resolution"
 directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=0.5
+log_name="high_res_yarn_dog_2" # 1-word description of the prompt for saving
+dcl_weight=1000000
 
 train_and_render $scene "$prompt" $directional $log_name $dcl_weight
 
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=1
 
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=5
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=10
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=50
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=100
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=500
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=1000
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=5000
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight
-
-scene=dog2
-prompt="a render of a cute light gray dog wearing sunglasses"
-directional=True
-log_name="sunglasses" # 1-word description of the prompt for saving
-dcl_weight=10000
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight

@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Any, List
 
 import numpy as np
 import torch
@@ -142,7 +142,7 @@ def sample_rays_and_pixels_synchronously(
     pixels: Tensor,
     indices: list,
     sample_size: int,
-) -> Tuple[Rays, Tensor]:
+) -> tuple[Rays, Any, list[list[Any] | Any] | list[Any] | Any, Any]:
     dtype, device = pixels.dtype, pixels.device
     permutation = torch.randperm(pixels.shape[0], dtype=torch.long, device=device)
     sampled_subset = permutation[:sample_size]

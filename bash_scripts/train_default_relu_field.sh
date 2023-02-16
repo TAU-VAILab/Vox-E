@@ -26,6 +26,26 @@ train_default() {
 
 # STARTING RUN:
 
-scene=$scene_in
+scene="hotdog"
+
+train_default $scene
+
+scene="drums"
+
+train_default $scene
+
+scene="mic"
+
+train_default $scene
+
+scene="ficus"
+
+train_default $scene
+
+scene="chair"
+
+train_default $scene
+
+scene="robot"
 
 train_default $scene

@@ -156,19 +156,40 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of iterations where we work on the same pose", show_default=True)
 @click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=0.0,
               help="weight for density correlation loss", show_default=True)
+@click.option("--l1", type=click.BOOL, required=False, default=False,
+              help="l1 loss", show_default=True)
+@click.option("--dcl", type=click.BOOL, required=False, default=False,
+              help="dcl loss", show_default=True)
+@click.option("--avg", type=click.BOOL, required=False, default=False,
+              help="avg color and density", show_default=True)
+@click.option("--two_way", type=click.BOOL, required=False, default=False,
+              help="two way optimization", show_default=True)
+@click.option("--lbo", type=click.BOOL, required=False, default=False,
+              help="lower_branch", show_default=True)
+@click.option("--weight_schedule", type=click.BOOL, required=False, default=False,
+              help="lower_branch", show_default=True)
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
     # load the requested configuration for the training
     config = EasyDict(kwargs)
 
+    wandb.login(key='ff94c0f010b9671bb533151afa9a1e60d30ee9a0')
+
     wandb.init(project='VoxelArtReluFields v1.1', entity="galf",
-               config=dict(config), name="test " + str(datetime.now()), 
+               config=dict(config), name="test " + str(datetime.now()),
                id=wandb.util.generate_id())
     # parse os-checked path-strings into Pathlike Paths :)
     data_path = Path(config.data_path)
     model_path = Path(config.high_res_model_path)
     output_path = Path(config.output_path)
+    print("l1:{}".format(config.l1))
+    print("dcl:{}".format(config.dcl))
+    print("avg:{}".format(config.avg))
+    print("two_way:{}".format(config.two_way))
+    print("lbo:{}".format(config.lbo))
+    print("w_sched:{}".format(config.weight_schedule))
 
     # save a copy of the configuration for reference
     log.info("logging configuration file ...")
@@ -233,6 +254,12 @@ def main(**kwargs) -> None:
         use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
         density_correlation_weight=config.density_correlation_weight,
+        l1=config.l1,
+        dcl=config.dcl,
+        avg=config.avg,
+        two_way=config.two_way,
+        lbo=config.lbo,
+        weight_schedule=config.weight_schedule
     )
 
 
