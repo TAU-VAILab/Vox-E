@@ -20,12 +20,12 @@ train_and_render() {
 	echo "Starting Training..."
 	python run_sds_on_high_res_model.py \
 	-d ../data/${1}/ \
-	-o logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}_256/ \
-	-i logs/rf/${1}_ref_shdeg_0/saved_models/model_final.pth \
+	-o logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}/ \
+	-i logs/rf/${1}_ref_shdeg_1/saved_models/model_final.pth \
 	-p "$2" \
 	--directional_dataset=${3} \
 	--density_correlation_weight=${5} \
-	--sh_degree=0 # we currently only support diffuse
+	--sh_degree=1 # we currently only support diffuse
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
@@ -37,9 +37,9 @@ train_and_render() {
 # STARTING RUN:
 
 scene=dog2
-prompt="a cute light grey dog wearing big sunglasses"
+prompt="a render of a cute light grey dog wearing big sunglasses"
 directional=True
-log_name="bigglasses" # 1-word description of the prompt for saving
-dcl_weight=5000.0
+log_name="bigglasses_shdeg1" # 1-word description of the prompt for saving
+dcl_weight=1000.0
 
 train_and_render $scene "$prompt" $directional $log_name $dcl_weight

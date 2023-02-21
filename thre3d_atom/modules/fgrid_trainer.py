@@ -8,7 +8,6 @@ import imageio
 import torch
 from torch import Tensor
 from torch.nn.functional import l1_loss, mse_loss
-
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -23,9 +22,9 @@ from thre3d_atom.rendering.volumetric.utils.misc import (
     flatten_rays,
 )
 from thre3d_atom.thre3d_reprs.renderers import render_sh_voxel_grid
-from thre3d_atom.thre3d_reprs.voxels import (
-    VoxelGrid,
-    scale_voxel_grid_with_required_output_size,
+from thre3d_atom.thre3d_reprs.feature_voxels import (
+    FeatureVoxelGrid,
+    scale_feature_voxel_grid_with_required_output_size,
 )
 from thre3d_atom.utils.constants import (
     CAMERA_BOUNDS,
@@ -43,13 +42,11 @@ from thre3d_atom.visualizations.static import (
     visualize_sh_vox_grid_vol_mod_rendered_feedback,
 )
 
-from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg')
 
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
 
-def train_sh_vox_grid_vol_mod_with_posed_images(
+def train_feature_vox_grid_vol_mod_with_posed_images(
     vol_mod: VolumetricModel,
     train_dataset: PosedImagesDataset,
     # required arguments:
@@ -82,7 +79,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     num_workers: int = 4,
     verbose_rendering: bool = True,
     fast_debug_mode: bool = False,
-    lpips_weight: float = 0.0
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -117,10 +113,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     Returns: the trained version of the VolumetricModel. Also writes multiple assets to disk
     """
     # assertions about the VolumetricModel being used with this TrainProcedure :)
-    assert isinstance(vol_mod.thre3d_repr, VoxelGrid), (
-        f"sorry, cannot use a {type(vol_mod.thre3d_repr)} with this TrainProcedure :(; "
-        f"only a {type(VoxelGrid)} can be used"
-    )
     assert (
         vol_mod.render_procedure == render_sh_voxel_grid
     ), f"sorry, non SH-based VoxelGrids cannot be used with this TrainProcedure"
@@ -146,7 +138,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     with torch.no_grad():
         # TODO: Possibly create a nice interface for reprs as a resolution of the below warning
         # noinspection PyTypeChecker
-        vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
+        vol_mod.thre3d_repr = scale_feature_voxel_grid_with_required_output_size(
             vol_mod.thre3d_repr,
             output_size=stagewise_voxel_grid_sizes[0],
             mode="trilinear",
@@ -310,11 +302,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             specular_rendered_batch = vol_mod.render_rays(rays_batch)
             specular_rendered_pixels_batch = specular_rendered_batch.colour
 
-            # LPIPS loss:
-            if stage == num_stages and lpips_weight > 0.0:
-                lpips_loss = lpips(specular_rendered_pixels_batch, pixels_batch)
-                total_loss = total_loss + lpips_loss * lpips_weight
-
             # compute loss and perform gradient update
             # Main, specular loss
             total_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch)
@@ -345,9 +332,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                 )
 
             # optimization steps:
-            optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
+            optimizer.zero_grad()
             # ---------------------------------------------------------------------------------
 
             # rest of the code per iteration is related to saving/logging/feedback/testing
@@ -392,10 +379,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                         f"diffuse_psnr: {diffuse_psnr_value.item(): .3f} "
                         f"total_loss: {total_loss: .3f} "
                     )
-                if stage == num_stages and lpips_weight > 0.0:
-                    loss_info_string += (
-                        f"lpips_loss: {lpips_loss.item(): .3f} "
-                    )
                 log.info(loss_info_string)
 
             # step the learning rate schedulers
@@ -431,21 +414,21 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                 )
 
             # obtain and log the test metrics
-            if (
-                test_dl is not None
-                and not fast_debug_mode
-                and (
-                    global_step % test_freq == 0
-                    or stage_iteration == num_iterations_per_stage
-                )
-            ):
-                test_sh_vox_grid_vol_mod_with_posed_images(
-                    vol_mod=vol_mod,
-                    test_dl=test_dl,
-                    parallel_rays_chunk_size=ray_batch_size,
-                    tensorboard_writer=tensorboard_writer,
-                    global_step=global_step,
-                )
+            #if (
+            #    test_dl is not None
+            #    and not fast_debug_mode
+            #    and (
+            #        global_step % test_freq == 0
+            #        or stage_iteration == num_iterations_per_stage
+            #    )
+            #):
+            #    test_sh_vox_grid_vol_mod_with_posed_images(
+            #        vol_mod=vol_mod,
+            #        test_dl=test_dl,
+            #        parallel_rays_chunk_size=ray_batch_size,
+            #        tensorboard_writer=tensorboard_writer,
+            #        global_step=global_step,
+            #    )
 
             # save the model
             if (
@@ -477,7 +460,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             # upsample the feature-grid after the completion of the stage:
             with torch.no_grad():
                 # noinspection PyTypeChecker
-                vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
+                vol_mod.thre3d_repr = scale_feature_voxel_grid_with_required_output_size(
                     vol_mod.thre3d_repr,
                     output_size=stagewise_voxel_grid_sizes[stage],
                     mode="trilinear",

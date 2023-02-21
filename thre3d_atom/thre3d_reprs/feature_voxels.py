@@ -2,6 +2,7 @@
 from typing import Tuple, NamedTuple, Optional, Callable, Dict, Any
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 from torch.nn import Module
 from torch.nn.functional import grid_sample, interpolate
@@ -43,7 +44,7 @@ class AxisAlignedBoundingBox(NamedTuple):
     z_range: Tuple[float, float]
 
 
-class VoxelGrid(Module):
+class FeatureVoxelGrid(Module):
     def __init__(
         self,
         # grid values:
@@ -62,6 +63,12 @@ class VoxelGrid(Module):
         radiance_transfer_function: Callable[[Tensor, Tensor], Tensor] = None,
         expected_density_scale: float = 1.0,
         tunable: bool = False,
+        rgbnet: nn.Module = None,
+        rgbnet_width: int = 64,
+        rgbnet_depth: int = 4,
+        densitynet: nn.Module = None,
+        densitynet_width: int = 64,
+        densitynet_depth: int = 4,
     ):
         """
         Defines a Voxel-Grid denoting a 3D-volume. To obtain features of a particular point inside
@@ -81,12 +88,6 @@ class VoxelGrid(Module):
             tunable: whether to treat the densities and features Tensors as tunable (trainable) parameters
         """
         # as usual start with assertions about the inputs:
-        assert (
-            len(densities.shape) == 4 and densities.shape[-1] == 1
-        ), f"features should be of shape [W x D x H x 1] as opposed to ({features.shape})"
-        assert (
-            len(features.shape) == 4
-        ), f"features should be of shape [W x D x H x F] as opposed to ({features.shape})"
         assert (
             densities.device == features.device
         ), f"densities and features are not on the same device :("
@@ -109,7 +110,34 @@ class VoxelGrid(Module):
         if tunable:
             self._densities = torch.nn.Parameter(self._densities)
             self._features = torch.nn.Parameter(self._features)
-            
+
+        # set RGB net:
+        if rgbnet != None:
+            self.rgbnet = rgbnet.to(features.device)
+        else:
+            self.rgbnet = nn.Sequential(
+                    nn.Linear(8, rgbnet_width), nn.ReLU(inplace=True),
+                    *[
+                        nn.Sequential(nn.Linear(rgbnet_width, rgbnet_width), nn.ReLU(inplace=True))
+                        for _ in range(rgbnet_depth-2)
+                    ],
+                    nn.Linear(rgbnet_width, 3),
+                ).to(features.device)
+            nn.init.constant_(self.rgbnet[-1].bias, 0)
+
+        # set Density net:
+        if densitynet != None:
+            self.densitynet = densitynet.to(densities.device)
+        else:
+            self.densitynet = nn.Sequential(
+                    nn.Linear(12, densitynet_width), nn.ReLU(inplace=True),
+                    *[
+                        nn.Sequential(nn.Linear(densitynet_width, densitynet_width), nn.ReLU(inplace=True))
+                        for _ in range(densitynet_depth-2)
+                    ],
+                    nn.Linear(densitynet_width, 1),
+                ).to(densities.device)
+            nn.init.constant_(self.densitynet[-1].bias, 0)
 
         # either densities or features can be used:
         self._device = features.device
@@ -307,7 +335,9 @@ class VoxelGrid(Module):
         )[
             ..., None
         ]  # note this None is required because of the squeeze operation :sweat_smile:
+        #interpolated_densities = self.densitynet(interpolated_densities)
         interpolated_densities = self._density_postactivation(interpolated_densities)
+        
 
         # interpolate and compute features
         preactivated_features = self._feature_preactivation(self._features)
@@ -320,6 +350,7 @@ class VoxelGrid(Module):
             .permute(0, 2, 3, 4, 1)
             .squeeze()
         )
+        interpolated_features = self.rgbnet(interpolated_features)
         interpolated_features = self._feature_postactivation(interpolated_features)
 
         # apply the radiance transfer function if it is not None and if view-directions are available
@@ -332,9 +363,9 @@ class VoxelGrid(Module):
         return torch.cat([interpolated_features, interpolated_densities], dim=-1)
 
 
-def scale_voxel_grid_with_required_output_size(
-    voxel_grid: VoxelGrid, output_size: Tuple[int, int, int], mode: str = "trilinear"
-) -> VoxelGrid:
+def scale_feature_voxel_grid_with_required_output_size(
+    voxel_grid: FeatureVoxelGrid, output_size: Tuple[int, int, int], mode: str = "trilinear"
+) -> FeatureVoxelGrid:
 
     # extract relevant information from the original input voxel_grid:
     og_unified_feature_tensor = torch.cat(
@@ -363,21 +394,23 @@ def scale_voxel_grid_with_required_output_size(
     )
 
     # create a new voxel_grid by cloning the input voxel_grid and update the newly scaled properties
-    new_voxel_grid = VoxelGrid(
+    new_voxel_grid = FeatureVoxelGrid(
         densities=new_features[..., -1:],
         features=new_features[..., :-1],
         voxel_size=new_voxel_size,
         **voxel_grid.get_config_dict(),
+        rgbnet=voxel_grid.rgbnet,
+        densitynet=voxel_grid.densitynet,
     )
 
     # noinspection PyProtectedMember
     return new_voxel_grid
 
 
-def create_voxel_grid_from_saved_info_dict(saved_info: Dict[str, Any]) -> VoxelGrid:
+def create_feature_voxel_grid_from_saved_info_dict(saved_info: Dict[str, Any]) -> FeatureVoxelGrid:
     densities = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_DENSITIES])
     features = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_FEATURES])
-    voxel_grid = VoxelGrid(
+    voxel_grid = FeatureVoxelGrid(
         densities=densities, features=features, **saved_info[THRE3D_REPR][CONFIG_DICT]
     )
     voxel_grid.load_state_dict(saved_info[THRE3D_REPR][STATE_DICT])

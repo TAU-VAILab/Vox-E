@@ -6,7 +6,7 @@ from easydict import EasyDict
 from torch.backends import cudnn
 
 from thre3d_atom.data.datasets import PosedImagesDataset
-from thre3d_atom.modules.trainers import train_sh_vox_grid_vol_mod_with_posed_images
+from thre3d_atom.modules.fgrid_trainer import train_feature_vox_grid_vol_mod_with_posed_images
 from thre3d_atom.modules.volumetric_model import VolumetricModel
 from thre3d_atom.rendering.volumetric.utils.misc import (
     compute_expected_density_scale_for_relu_field_grid,
@@ -16,6 +16,7 @@ from thre3d_atom.thre3d_reprs.renderers import (
     SHVoxGridRenderConfig,
 )
 from thre3d_atom.thre3d_reprs.voxels import VoxelGrid, VoxelSize, VoxelGridLocation
+from thre3d_atom.thre3d_reprs.feature_voxels import FeatureVoxelGrid
 from thre3d_atom.utils.constants import NUM_COLOUR_CHANNELS
 from thre3d_atom.utils.logging import log
 from thre3d_atom.utils.misc import log_config_to_disk
@@ -72,7 +73,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)                                                    # |              
 # -------------------------------------------------------------------------------------
 
-@click.option("--use_softplus_field", type=click.BOOL, required=False, default=False,
+@click.option("--use_softplus_field", type=click.BOOL, required=False, default=True,
               help="whether to use softplus_field or relu_field", show_default=True)
 
 # Rendering related arguments:
@@ -129,9 +130,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--fast_debug_mode", type=click.BOOL, required=False, default=False,
               help="whether to use the fast debug mode while training "
                    "(skips testing and some lengthy visualizations)", show_default=True)
-# Additional Weights:
-@click.option("--lpips_weight", type=click.FLOAT, required=False, default=0.1,
-              help="weight of lpips loss", show_default=True)
 
 # fmt: on
 # -------------------------------------------------------------------------------------
@@ -206,11 +204,11 @@ def main(**kwargs) -> None:
     densities = torch.empty((*config.grid_dims, 1), dtype=torch.float32, device=device)
     torch.nn.init.uniform_(densities, -1.0, 1.0)
     num_sh_features = NUM_COLOUR_CHANNELS * ((config.sh_degree + 1) ** 2)
-    features = torch.empty((*config.grid_dims, num_sh_features), dtype=torch.float32, device=device)
+    features = torch.empty((*config.grid_dims, 8), dtype=torch.float32, device=device)
     torch.nn.init.uniform_(features, -1.0, 1.0)
     voxel_size = VoxelSize(*[dim_size / grid_dim for dim_size, grid_dim
                              in zip(config.grid_world_size, config.grid_dims)])
-    voxel_grid = VoxelGrid(
+    voxel_grid = FeatureVoxelGrid(
         densities=densities,
         features=features,
         voxel_size=voxel_size,
@@ -236,7 +234,7 @@ def main(**kwargs) -> None:
     )
 
     # train the model:
-    train_sh_vox_grid_vol_mod_with_posed_images(
+    train_feature_vox_grid_vol_mod_with_posed_images(
         vol_mod=vox_grid_vol_mod,
         train_dataset=train_dataset,
         output_dir=output_path,
@@ -257,7 +255,6 @@ def main(**kwargs) -> None:
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         fast_debug_mode=config.fast_debug_mode,
-        lpips_weight=config.lpips_weight,
     )
 
 

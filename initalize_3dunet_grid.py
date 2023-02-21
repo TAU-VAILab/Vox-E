@@ -2,20 +2,35 @@ from pathlib import Path
 
 import click
 import torch
+from torch import Tensor
+import wandb
+import copy
+from datetime import datetime
 from easydict import EasyDict
 from torch.backends import cudnn
 
 from thre3d_atom.data.datasets import PosedImagesDataset
-from thre3d_atom.modules.trainers import train_sh_vox_grid_vol_mod_with_posed_images
-from thre3d_atom.modules.volumetric_model import VolumetricModel
-from thre3d_atom.rendering.volumetric.utils.misc import (
-    compute_expected_density_scale_for_relu_field_grid,
+from thre3d_atom.modules.unet3d_trainer import train_3dunet_vox_grid_vol_mod_with_posed_images
+from thre3d_atom.modules.volumetric_model import (
+    VolumetricModel,
+    create_volumetric_model_from_saved_model,
 )
+
 from thre3d_atom.thre3d_reprs.renderers import (
     render_sh_voxel_grid,
     SHVoxGridRenderConfig,
 )
-from thre3d_atom.thre3d_reprs.voxels import VoxelGrid, VoxelSize, VoxelGridLocation
+
+from thre3d_atom.utils.imaging_utils import CameraPose
+
+from thre3d_atom.utils.constants import (
+    CAMERA_BOUNDS,
+    CAMERA_INTRINSICS,
+    HEMISPHERICAL_RADIUS,
+)
+
+from thre3d_atom.thre3d_reprs.voxels_3dunet import VoxelGrid3dUnet
+from thre3d_atom.thre3d_reprs.voxels import VoxelSize, VoxelGridLocation, create_voxel_grid_from_saved_info_dict
 from thre3d_atom.utils.constants import NUM_COLOUR_CHANNELS
 from thre3d_atom.utils.logging import log
 from thre3d_atom.utils.misc import log_config_to_disk
@@ -40,6 +55,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Required arguments:
 @click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path to the input dataset")
+@click.option("-i", "--high_res_model_path", type=click.Path(file_okay=True, dir_okay=False),
+              required=True, help="path to the pre-trained high-res model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for training output")
 
@@ -48,7 +65,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               default=True, help="whether the data directory has separate train and test folders", 
               show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
-              default=2.0, help="downscale factor for the input images if needed."
+              default=4.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
 
 # Voxel-grid related arguments:
@@ -64,6 +81,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--sh_degree", type=click.INT, required=False, default=0,
               help="degree of the spherical harmonics coefficients to be used. "
                    "Supported values: [0, 1, 2, 3]", show_default=True)
+
 # -------------------------------------------------------------------------------------
 #                        !!! :) MOST IMPORTANT OPTION :) !!!                          |
 # -------------------------------------------------------------------------------------
@@ -72,7 +90,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)                                                    # |              
 # -------------------------------------------------------------------------------------
 
-@click.option("--use_softplus_field", type=click.BOOL, required=False, default=False,
+@click.option("--use_softplus_field", type=click.BOOL, required=False, default=True,
               help="whether to use softplus_field or relu_field", show_default=True)
 
 # Rendering related arguments:
@@ -85,19 +103,19 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)  # this option is also used in pre-processing the dataset
 
 # Training related arguments:
-@click.option("--ray_batch_size", type=click.INT, required=False, default=16384,
+@click.option("--ray_batch_size", type=click.INT, required=False, default=65536,
               help="number of randomly sampled rays used per training iteration", show_default=True)
 @click.option("--train_num_samples_per_ray", type=click.INT, required=False, default=256,
               help="number of samples taken per ray during training", show_default=True)
-@click.option("--num_stages", type=click.INT, required=False, default=4,
+@click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=500,
+@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=5000,
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.03,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.001,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
-@click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=400,
+@click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=5000*100,
               help="number of iterations after which lr is exponentially decayed per stage", show_default=True)
 @click.option("--lr_decay_gamma_per_stage", type=click.FLOAT, required=False, default=0.1,
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
@@ -107,7 +125,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="whether to apply the diffuse render regularization."
                    "this is a weird conjure of mine, where we ask the diffuse render "
                    "to match, as closely as possible, the GT-possibly-specular one :D"
-                   "can be off or on, on yields stabler training :) ", show_default=True)
+                   "can be off or on, on yields stabler training :) ", show_default=False)
 @click.option("--num_workers", type=click.INT, required=False, default=4,
               help="number of worker processes used for loading the data using the dataloader"
                    "note that this will be ignored if GPU-caching of the data is successful :)", show_default=True)
@@ -129,25 +147,35 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--fast_debug_mode", type=click.BOOL, required=False, default=False,
               help="whether to use the fast debug mode while training "
                    "(skips testing and some lengthy visualizations)", show_default=True)
-# Additional Weights:
-@click.option("--lpips_weight", type=click.FLOAT, required=False, default=0.1,
-              help="weight of lpips loss", show_default=True)
 
+# sds specific stuff
+@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.0000001,
+              help="diffuse weight used for regularization", show_default=True)
+@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.0000001,
+              help="specular weight used for regularization", show_default=True)
+@click.option("--directional_dataset", type=click.BOOL, required=False, default=False,
+              help="whether to use a directional dataset for SDS where each view comes with a direction",
+               show_default=True)
+@click.option("--use_uncertainty", type=click.BOOL, required=False, default=False,
+              help="whether to use an uncertainty aware type loss",
+               show_default=True)
+@click.option("--new_frame_frequency", type=click.INT, required=False, default=1,
+              help="number of iterations where we work on the same pose", show_default=True)
+@click.option("--gvg_weight", type=click.FLOAT, required=False, default=0.0,
+              help="grid vs grid loss weight", show_default=True)
 # fmt: on
 # -------------------------------------------------------------------------------------
+
 def main(**kwargs) -> None:
     # load the requested configuration for the training
     config = EasyDict(kwargs)
 
     # parse os-checked path-strings into Pathlike Paths :)
-    data_path = Path(config.data_path)
+    model_path = Path(config.high_res_model_path)
     output_path = Path(config.output_path)
+    output_path.mkdir(exist_ok=True, parents=True)
 
-    # save a copy of the configuration for reference
-    log.info("logging configuration file ...")
-    log_config_to_disk(config, output_path)
-
-    # create a datasets for training and testing:
+    data_path = Path(config.data_path)
     if config.separate_train_test_folders:
         train_dataset, test_dataset = (
             PosedImagesDataset(
@@ -167,63 +195,35 @@ def main(**kwargs) -> None:
             downsample_factor=config.data_downsample_factor,
             rgba_white_bkgd=config.white_bkgd,
         )
-        test_dataset = None
+    
+    pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
+        model_path=model_path,
+        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
+        device=device,
+    )
 
-    # Choose the proper activations dict based on the requested mode:
-    if config.use_relu_field:
-        vox_grid_density_activations_dict = {
-            "density_preactivation": torch.nn.Identity(),
-            "density_postactivation": torch.nn.ReLU(),
-            # note this expected density value :)
-            "expected_density_scale": compute_expected_density_scale_for_relu_field_grid(
-                config.grid_world_size
-            ),
-        }
-    if config.use_softplus_field:
-        vox_grid_density_activations_dict = {
-            "density_preactivation": torch.nn.Identity(),
-            "density_postactivation": torch.nn.Softplus(),
-            # note this expected density value :)
-            "expected_density_scale": compute_expected_density_scale_for_relu_field_grid(
-                config.grid_world_size
-            ),
-        }
-    else:
-        vox_grid_density_activations_dict = {
+    # set up 3d Unet vox grid
+    vox_grid_density_activations_dict = {
             "density_preactivation": torch.abs,
             "density_postactivation": torch.nn.Identity(),
             "expected_density_scale": 1.0,  # Also note this expected density value :wink:
         }
-    # The use of terminologies pre-activation and post-activations is inspired from the
-    # amazing DVGo work -> https://sunset1995.github.io/dvgo/
-    # Please feel free to check out their work for lot more detailed and exhaustive experiments
-    # On 3D scene reconstructions.
-    # P.S. Not a criticism :wink:, but there isn't and can never be such a thing as IN-ACTIVATION
-    # IT'S NOT A FEATURE, IT'S A BUG! :D :D
-
-    # construct the VoxelGrid thre3d_repr :)
-    # fmt: off
-    densities = torch.empty((*config.grid_dims, 1), dtype=torch.float32, device=device)
-    torch.nn.init.uniform_(densities, -1.0, 1.0)
-    num_sh_features = NUM_COLOUR_CHANNELS * ((config.sh_degree + 1) ** 2)
-    features = torch.empty((*config.grid_dims, num_sh_features), dtype=torch.float32, device=device)
-    torch.nn.init.uniform_(features, -1.0, 1.0)
     voxel_size = VoxelSize(*[dim_size / grid_dim for dim_size, grid_dim
                              in zip(config.grid_world_size, config.grid_dims)])
-    voxel_grid = VoxelGrid(
-        densities=densities,
-        features=features,
-        voxel_size=voxel_size,
-        grid_location=VoxelGridLocation(*config.grid_location),
-        **vox_grid_density_activations_dict,
-        tunable=True,
-    )
-    # fmt: on
+    unet3d_vox_grid = VoxelGrid3dUnet(densities=pretrained_vol_mod.thre3d_repr._densities,
+                                     features=pretrained_vol_mod.thre3d_repr._features,
+                                     voxel_size=voxel_size,
+                                     grid_location=VoxelGridLocation(*config.grid_location),
+                                     **vox_grid_density_activations_dict,
+                                     tunable=True,)
+    
+    print("Starting Unet initialization")
+    #train_3dunet_vox_grid_to_copy_pretrained(unet3d_vox_grid,
+    #                                         pretrained_vol_mod.thre3d_repr._densities,
+    #                                         pretrained_vol_mod.thre3d_repr._features)
 
-    # set up a volumetricModel using the previously created voxel-grid
-    # noinspection PyTypeChecker
-    vox_grid_vol_mod = VolumetricModel(
-        thre3d_repr=voxel_grid,
+    unet3d_vol_mod = VolumetricModel(
+        thre3d_repr=unet3d_vox_grid,
         render_procedure=render_sh_voxel_grid,
         render_config=SHVoxGridRenderConfig(
             num_samples_per_ray=config.train_num_samples_per_ray,
@@ -235,9 +235,9 @@ def main(**kwargs) -> None:
         device=device,
     )
 
-    # train the model:
-    train_sh_vox_grid_vol_mod_with_posed_images(
-        vol_mod=vox_grid_vol_mod,
+    train_3dunet_vox_grid_vol_mod_with_posed_images(
+        vol_mod_3dunet=unet3d_vol_mod,
+        vol_mod_pretrained=pretrained_vol_mod,
         train_dataset=train_dataset,
         output_dir=output_path,
         test_dataset=test_dataset,
@@ -257,9 +257,65 @@ def main(**kwargs) -> None:
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         fast_debug_mode=config.fast_debug_mode,
-        lpips_weight=config.lpips_weight,
+        gvg_weight=config.gvg_weight,
     )
 
+    #camera_bounds, camera_intrinsics = (
+    #    train_dataset.camera_bounds,
+    #    train_dataset.camera_intrinsics,
+    #)
+    #torch.save(
+    #           unet3d_vol_mod.get_save_info(
+    #               extra_info={
+    #                   CAMERA_BOUNDS: camera_bounds,
+    #                   CAMERA_INTRINSICS: camera_intrinsics,
+    #                   HEMISPHERICAL_RADIUS: train_dataset.get_hemispherical_radius_estimate(),
+    #               }
+    #           ),
+    #           output_path / f"initialized_3dunet_voxgrid.pth",
+    #        )
+    print("Success!")
+
+    #render_feedback_pose = CameraPose(
+    #                    rotation=train_dataset[10][1][:, :3].cpu().numpy(),
+    #                    translation=train_dataset[10][1][:, 3:].cpu().numpy(),
+    #                )
+    #visualize_sh_vox_grid_vol_mod_rendered_feedback(
+    #                    vol_mod=vox_grid_vol_mod,
+    #                    vol_mod_name="sds",
+    #                    render_feedback_pose=render_feedback_pose,
+    #                    camera_intrinsics=camera_intrinsics,
+    #                    global_step=0,
+    #                    feedback_logs_dir=output_path,
+    #                    parallel_rays_chunk_size=vox_grid_vol_mod.render_config.parallel_rays_chunk_size,
+    #                    training_time=0,
+    #                    log_diffuse_rendered_version=False,
+    #                    use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+    #                    overridden_num_samples_per_ray=vox_grid_vol_mod.render_config.render_num_samples_per_ray,
+    #                    verbose_rendering=False,
+    #                    log_wandb=False,
+    #                )
+
+def train_3dunet_vox_grid_to_copy_pretrained(vox_grid_3du: VoxelGrid3dUnet,
+                                             pretrained_features: Tensor,
+                                             pretrained_densities: Tensor,
+                                             learning_rate: float = 0.015,
+                                             feedback_fr: int = 100,
+                                             epochs = 3000):
+    optimizer = torch.optim.Adam(vox_grid_3du.parameters(), lr=learning_rate)
+    loss_fn = torch.nn.MSELoss()
+    target_grid = torch.cat([pretrained_densities, pretrained_features], dim=-1)
+
+    # training loop
+    for iter in range(epochs):
+        optimizer.zero_grad()
+        densities, features = vox_grid_3du.get_densities_and_features()
+        output = torch.cat([densities, features], dim=-1)
+        loss = loss_fn(output, target_grid)
+        loss.backward()
+        optimizer.step()
+        if iter % feedback_fr == 0 or iter == epochs - 1:
+            print(f"Iter: {iter}, loss: {loss.item()}")
 
 if __name__ == "__main__":
     main()

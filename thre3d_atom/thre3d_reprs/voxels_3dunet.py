@@ -14,6 +14,7 @@ from thre3d_atom.thre3d_reprs.constants import (
     CONFIG_DICT,
 )
 from thre3d_atom.utils.imaging_utils import adjust_dynamic_range
+from thre3d_atom.thre3d_reprs.unet3d import UNet3d
 
 
 class VoxelSize(NamedTuple):
@@ -43,7 +44,7 @@ class AxisAlignedBoundingBox(NamedTuple):
     z_range: Tuple[float, float]
 
 
-class VoxelGrid(Module):
+class VoxelGrid3dUnet(Module):
     def __init__(
         self,
         # grid values:
@@ -94,8 +95,10 @@ class VoxelGrid(Module):
         super().__init__()
 
         # initialize the state of the object
-        self._densities = densities
-        self._features = features
+        self._densities = torch.empty_like(densities)
+        self._features = torch.empty_like(features)
+        self._in_densities = densities.detach()
+        self._in_features = features.detach()
         self._density_preactivation = density_preactivation
         self._density_postactivation = density_postactivation
         self._feature_preactivation = feature_preactivation
@@ -106,13 +109,12 @@ class VoxelGrid(Module):
         self._expected_density_scale = expected_density_scale
         self._tunable = tunable
 
-        if tunable:
-            self._densities = torch.nn.Parameter(self._densities)
-            self._features = torch.nn.Parameter(self._features)
-            
+        self.input_grid = torch.cat([self._in_features, self._in_densities], dim=-1)
+        self.grid_calculated = False
 
         # either densities or features can be used:
         self._device = features.device
+        self.unet = UNet3d(4, 4).to(self._device)
 
         # note the x, y and z conventions for the width (+ve right), depth (+ve inwards) and height (+ve up)
         self.width_x, self.depth_y, self.height_z = (
@@ -172,6 +174,24 @@ class VoxelGrid(Module):
         save_config_dict = self.get_config_dict()
         save_config_dict.update({"voxel_size": self._voxel_size})
         return save_config_dict
+
+    def set_input_grid(self,
+                       densities: Tensor,
+                       features: Tensor):
+        self._in_densities = densities.detach()
+        self._in_features = features.detach()
+        self.input_grid = torch.cat([self._in_features, self._in_densities], dim=-1)
+        self.grid_calculated = False
+
+    def get_densities_and_features(self) -> Tuple[Tensor, Tensor]:
+        grid = self.unet(torch.unsqueeze(self.input_grid.permute(3, 0, 1, 2), dim=0))
+        grid = grid.squeeze().permute(1, 2, 3, 0)
+        densities = grid[..., -1:]
+        features = grid[..., :-1]
+        self._densities = densities
+        self._features = features
+        self.grid_calculated = True
+        return densities, features
 
     def get_config_dict(self) -> Dict[str, Any]:
         return {
@@ -285,6 +305,10 @@ class VoxelGrid(Module):
                  or of shape [N x <features + 1> (number of features + density)], depending upon
                  whether the `self._radiance_transfer_function` is None.
         """
+        # get densities and features using the unet
+        if not self.grid_calculated:
+            _, _ = self.get_densities_and_features()
+
         # obtain the range-normalized points for interpolation
         normalized_points = self._normalize_points(points)
 
@@ -332,9 +356,9 @@ class VoxelGrid(Module):
         return torch.cat([interpolated_features, interpolated_densities], dim=-1)
 
 
-def scale_voxel_grid_with_required_output_size(
-    voxel_grid: VoxelGrid, output_size: Tuple[int, int, int], mode: str = "trilinear"
-) -> VoxelGrid:
+def scale_3dunet_voxel_grid_with_required_output_size(
+    voxel_grid: VoxelGrid3dUnet, output_size: Tuple[int, int, int], mode: str = "trilinear"
+) -> VoxelGrid3dUnet:
 
     # extract relevant information from the original input voxel_grid:
     og_unified_feature_tensor = torch.cat(
@@ -363,7 +387,7 @@ def scale_voxel_grid_with_required_output_size(
     )
 
     # create a new voxel_grid by cloning the input voxel_grid and update the newly scaled properties
-    new_voxel_grid = VoxelGrid(
+    new_voxel_grid = VoxelGrid3dUnet(
         densities=new_features[..., -1:],
         features=new_features[..., :-1],
         voxel_size=new_voxel_size,
@@ -374,10 +398,13 @@ def scale_voxel_grid_with_required_output_size(
     return new_voxel_grid
 
 
-def create_voxel_grid_from_saved_info_dict(saved_info: Dict[str, Any]) -> VoxelGrid:
-    densities = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_DENSITIES])
-    features = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_FEATURES])
-    voxel_grid = VoxelGrid(
+def create_3dunet_voxel_grid_from_saved_info_dict(saved_info: Dict[str, Any]) -> VoxelGrid3dUnet:
+    # you have to load these later
+    densities = torch.empty((128, 128, 128, 1), device='cuda')
+    features = torch.empty((128, 128, 128, 3), device='cuda')
+
+    # the input densities and features are the pretrained densities and features
+    voxel_grid = VoxelGrid3dUnet(
         densities=densities, features=features, **saved_info[THRE3D_REPR][CONFIG_DICT]
     )
     voxel_grid.load_state_dict(saved_info[THRE3D_REPR][STATE_DICT])

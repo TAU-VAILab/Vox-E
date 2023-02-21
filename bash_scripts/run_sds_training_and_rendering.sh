@@ -21,7 +21,7 @@ train_and_render() {
 	python run_sds_on_high_res_model.py \
 	-d ../data/${1}/ \
 	-o logs/rf/${1}_sds_dir_${3}_${4}/ \
-	-i logs/rf/high_res_${1}_diffuse/saved_models/model_final.pth \
+	-i logs/rf/${1}_ref_shdeg_0/saved_models/model_final.pth \
 	-p "$2" \
 	--directional_dataset=${3} \
 	--sh_degree=0 # we currently only support diffuse

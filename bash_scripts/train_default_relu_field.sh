@@ -20,8 +20,14 @@ train_default() {
 	# Train:
 	echo "Starting Training..."
 	python train_sh_based_voxel_grid_with_posed_images.py -d ../data/${1}/ \
-	-o logs/rf/high_res_${1}_diffuse/ \
-	--sh_degree=0 # we currently only support diffuse
+	-o logs/rf/${1}_ref_shdeg0_lpips/ \
+	--sh_degree=0
+
+	# Rendering Output Video:
+	echo "Starting Rendering..."
+	python render_sh_based_voxel_grid.py \
+	-i logs/rf/${1}_ref_shdeg0_lpips/saved_models/model_final.pth \
+	-o output_renders/${1}_ref_shdeg0_lpips
 }
 
 # STARTING RUN:
