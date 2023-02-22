@@ -69,9 +69,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     scale_factor: float = 2.0,
     # learning_rate and related arguments
     learning_rate: float = 0.03,
-    lr_decay_gamma_per_stage: float = 0.1,
-    lr_decay_steps_per_stage: int = 1000,
-    stagewise_lr_decay_gamma: float = 0.9,
+    lr_decay_start: int = 5000,
+    lr_freq: int = 400,
+    lr_gamma: float = 0.8,
     # option to have a specific feedback_pose_for_visual feedback rendering
     render_feedback_pose: Optional[CameraPose] = None,
     # various training-loop frequencies
@@ -93,6 +93,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     new_frame_frequency: int = 1,
     density_correlation_weight: float = 0.0,
     unet3d_mode: bool = False,
+    tv_density_weight: float = 0.0,
+    tv_features_weight: float = 0.0,
+    do_sds: bool = True,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -251,7 +254,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         infinite_train_dl = iter(infinite_dataloader(train_dl))
 
         # setup volumetric_model's optimizer
-        current_stage_lr = learning_rate * (stagewise_lr_decay_gamma ** (stage - 1))
+        current_stage_lr = learning_rate
 
         params=[{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
                     
@@ -268,7 +271,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
         # setup learning rate schedulers for the optimizer
         lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            optimizer, gamma=lr_decay_gamma_per_stage
+            optimizer, gamma=lr_gamma
         )
 
         # display logs related to this training stage:
@@ -328,7 +331,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
                 # sample a subset of rays and pixels synchronously
                 batch_size_in_images = int(ray_batch_size / (im_h * im_w))
-                rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
+                rays_batch, _, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
                         unflattened_rays, images, indices, batch_size_in_images
                     )
 
@@ -349,15 +352,27 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             else:
                 logvars_batch = None
 
-            total_loss = total_loss + sds_loss.training_step(specular_rendered_pixels_batch_sds,
-                                                             im_h, im_w, 
-                                                             directions=direction_batch, 
-                                                             logvars=logvars_batch)
+            if do_sds:
+                total_loss = total_loss + sds_loss.training_step(specular_rendered_pixels_batch_sds,
+                                                                 im_h, im_w, 
+                                                                 directions=direction_batch, 
+                                                                 logvars=logvars_batch)
 
             ### insert losses that tie them together here ###
             density_correlation_loss = _density_correlation_loss(sds_density=sds_density,
                                                                  regular_density=regular_density)
             total_loss = total_loss + density_correlation_loss * density_correlation_weight
+
+            ### insert other losses here ###
+            if tv_density_weight > 0 and global_step % 1 == 0:
+                activation = torch.nn.ReLU()
+                activated_grid = activation(sds_vol_mod.thre3d_repr._densities)
+                tv_density_loss = _tv_loss_on_grid(activated_grid)
+                total_loss = total_loss + tv_density_loss * tv_density_weight
+            
+            if tv_features_weight > 0 and global_step % 1 == 0:
+                tv_features_loss = _tv_loss_on_grid(sds_vol_mod.thre3d_repr._features)
+                total_loss = total_loss + tv_features_loss * tv_features_weight
 
             # optimization steps:
             total_loss.backward()
@@ -367,9 +382,15 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # wandb logging:
             if use_uncertainty:
                 _log_variances_in_wandb(logvars, global_step)
+            if tv_density_weight > 0:
+                wandb.log({"tv_density_loss" : tv_density_loss.item()}, step=global_step)
+            if tv_features_weight > 0:
+                wandb.log({"tv_features_loss" : tv_features_loss.item()}, step=global_step)
             wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
             wandb.log({"total_loss" : total_loss}, step=global_step)
             wandb.log({"first selected indx in batch" : index_batch[0]}, step=global_step)
+            lrs = [param_group["lr"] for param_group in optimizer.param_groups]
+            wandb.log({"learning rate": lrs[0]}, step=global_step)
 
             # ---------------------------------------------------------------------------------
 
@@ -407,7 +428,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 log.info(loss_info_string)
 
             # step the learning rate schedulers
-            if stage_iteration % lr_decay_steps_per_stage == 0:
+            if stage_iteration % lr_freq == 0 and global_step >= lr_decay_start:
                 lr_scheduler.step()
                 new_lrs = [param_group["lr"] for param_group in optimizer.param_groups]
                 log_string = f"Adjusted learning rate | learning rates: {new_lrs} "
@@ -565,7 +586,7 @@ def _get_dir_batch_from_poses(poses: Tensor):
 
         # determine view direction according to pitch, yaw
         dir = 'front'
-        if yaw > 60.0:
+        if yaw > 45.0:
             dir = 'side'
         if yaw > 120.0:
             dir = 'back'
@@ -582,3 +603,10 @@ def _pitch_yaw_from_Rt(rotation: Tensor):
     pitch = np.arctan(tz / tr) * 180 / np.pi
     yaw = np.arccos(rotation[0, 0].cpu().numpy()) * 180.0 / np.pi
     return pitch, yaw
+
+def _tv_loss_on_grid(grid: Tensor):
+    tv0 = grid.diff(dim=0).abs()
+    tv1 = grid.diff(dim=1).abs()
+    tv2 = grid.diff(dim=2).abs()
+    return (tv0.mean() + tv1.mean() + tv2.mean()) / 3
+

@@ -48,7 +48,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               default=True, help="whether the data directory has separate train and test folders", 
               show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
-              default=2.0, help="downscale factor for the input images if needed."
+              default=4.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
 
 # Voxel-grid related arguments:
@@ -72,7 +72,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)                                                    # |              
 # -------------------------------------------------------------------------------------
 
-@click.option("--use_softplus_field", type=click.BOOL, required=False, default=False,
+@click.option("--use_softplus_field", type=click.BOOL, required=False, default=True,
               help="whether to use softplus_field or relu_field", show_default=True)
 
 # Rendering related arguments:
@@ -85,7 +85,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)  # this option is also used in pre-processing the dataset
 
 # Training related arguments:
-@click.option("--ray_batch_size", type=click.INT, required=False, default=16384,
+@click.option("--ray_batch_size", type=click.INT, required=False, default=65536,
               help="number of randomly sampled rays used per training iteration", show_default=True)
 @click.option("--train_num_samples_per_ray", type=click.INT, required=False, default=256,
               help="number of samples taken per ray during training", show_default=True)
@@ -130,7 +130,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="whether to use the fast debug mode while training "
                    "(skips testing and some lengthy visualizations)", show_default=True)
 # Additional Weights:
-@click.option("--lpips_weight", type=click.FLOAT, required=False, default=0.1,
+@click.option("--lpips_weight", type=click.FLOAT, required=False, default=0.0,
               help="weight of lpips loss", show_default=True)
 
 # fmt: on

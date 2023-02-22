@@ -108,12 +108,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="factor by which the grid is up-scaled after each stage", show_default=True)
 @click.option("--learning_rate", type=click.FLOAT, required=False, default=0.025,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
-@click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=5000*100,
-              help="number of iterations after which lr is exponentially decayed per stage", show_default=True)
-@click.option("--lr_decay_gamma_per_stage", type=click.FLOAT, required=False, default=0.1,
+@click.option("--lr_freq", type=click.INT, required=False, default=400,
+              help="frequency in which to reduce learning rate", show_default=True)
+@click.option("--lr_decay_start", type=click.INT, required=False, default=5000,
+              help="step in which to start decreasing learning rate", show_default=True)
+@click.option("--lr_gamma", type=click.FLOAT, required=False, default=0.8,
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
-@click.option("--stagewise_lr_decay_gamma", type=click.FLOAT, required=False, default=0.9,
-              help="value of gamma used for reducing the learning rate after each stage", show_default=True)
 @click.option("--apply_diffuse_render_regularization", type=click.BOOL, required=False, default=True,
               help="whether to apply the diffuse render regularization."
                    "this is a weird conjure of mine, where we ask the diffuse render "
@@ -152,10 +152,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--use_uncertainty", type=click.BOOL, required=False, default=False,
               help="whether to use an uncertainty aware type loss",
                show_default=True)
+@click.option("--do_sds", type=click.BOOL, required=False, default=True,
+              help="whether to use an uncertainty aware type loss",
+               show_default=True)
 @click.option("--new_frame_frequency", type=click.INT, required=False, default=1,
               help="number of iterations where we work on the same pose", show_default=True)
 @click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=0.0,
               help="weight for density correlation loss", show_default=True)
+@click.option("--tv_density_weight", type=click.FLOAT, required=False, default=0.0,
+              help="weight for total variation loss on densities", show_default=True)
+@click.option("--tv_features_weight", type=click.FLOAT, required=False, default=0.0,
+              help="weight for total variation loss on densities", show_default=True)
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -215,9 +223,9 @@ def main(**kwargs) -> None:
         num_iterations_per_stage=config.num_iterations_per_stage,
         scale_factor=config.scale_factor,
         learning_rate=config.learning_rate,
-        lr_decay_gamma_per_stage=config.lr_decay_gamma_per_stage,
-        lr_decay_steps_per_stage=config.lr_decay_steps_per_stage,
-        stagewise_lr_decay_gamma=config.stagewise_lr_decay_gamma,
+        lr_decay_start=config.lr_decay_start,
+        lr_freq=config.lr_freq,
+        lr_gamma=config.lr_gamma,
         save_freq=config.save_frequency,
         test_freq=config.test_frequency,
         feedback_freq=config.feedback_frequency,
@@ -232,7 +240,10 @@ def main(**kwargs) -> None:
         directional_dataset=config.directional_dataset,
         use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
-        density_correlation_weight=config.density_correlation_weight
+        density_correlation_weight=config.density_correlation_weight,
+        tv_density_weight=config.tv_density_weight,
+        tv_features_weight=config.tv_features_weight,
+        do_sds=config.do_sds,
     )
 
 

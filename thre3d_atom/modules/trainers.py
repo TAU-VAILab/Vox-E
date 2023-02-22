@@ -4,6 +4,7 @@ from functools import partial
 from pathlib import Path
 from typing import Callable, Optional
 
+import lpips as lpips
 import imageio
 import torch
 from torch import Tensor
@@ -20,6 +21,8 @@ from thre3d_atom.rendering.volumetric.utils.misc import (
     cast_rays,
     collate_rays,
     sample_random_rays_and_pixels_synchronously,
+    sample_rays_and_pixels_synchronously,
+    collate_rays_unflattened,
     flatten_rays,
 )
 from thre3d_atom.thre3d_reprs.renderers import render_sh_voxel_grid
@@ -43,8 +46,8 @@ from thre3d_atom.visualizations.static import (
     visualize_sh_vox_grid_vol_mod_rendered_feedback,
 )
 
-from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg')
+#from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+#lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg')
 
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
@@ -124,6 +127,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     assert (
         vol_mod.render_procedure == render_sh_voxel_grid
     ), f"sorry, non SH-based VoxelGrids cannot be used with this TrainProcedure"
+
+    # lpips vgg computer
+    vgg_lpips_computer = lpips.LPIPS(net="vgg").to(vol_mod.device)
 
     # fix the sizes of the feature grids at different stages
     stagewise_voxel_grid_sizes = compute_thre3d_grid_sizes(
@@ -279,45 +285,51 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             # sample a batch rays and pixels for a single iteration
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
-            images, poses, _ = next(infinite_train_dl)
+            #images, poses, _ = next(infinite_train_dl)
+
+            images, poses, indices = next(infinite_train_dl)
 
             # cast rays for all the loaded images:
             rays_list = []
+            unflattened_rays_list = []
             for pose in poses:
-                casted_rays = flatten_rays(
-                    cast_rays(
+                unflattened_rays = cast_rays(
                         current_stage_train_dataset.camera_intrinsics,
                         CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
                         device=vol_mod.device,
                     )
-                )
+                casted_rays = flatten_rays(unflattened_rays)
                 rays_list.append(casted_rays)
-            rays = collate_rays(rays_list)
-
+                unflattened_rays_list.append(unflattened_rays)
+            unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
             # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
-            pixels = (
-                images.permute(0, 2, 3, 1)
-                .reshape(-1, images.shape[1])
-                .to(vol_mod.device)
-            )
-
+            _, _, im_h, im_w = images.shape
             # sample a subset of rays and pixels synchronously
-            rays_batch, pixels_batch = sample_random_rays_and_pixels_synchronously(
-                rays, pixels, ray_batch_size
-            )
+            batch_size_in_images = int(ray_batch_size / (im_h * im_w))
+            rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
+                    unflattened_rays, images, indices, batch_size_in_images
+                )
 
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch = vol_mod.render_rays(rays_batch)
             specular_rendered_pixels_batch = specular_rendered_batch.colour
 
-            # LPIPS loss:
-            if stage == num_stages and lpips_weight > 0.0:
-                lpips_loss = lpips(specular_rendered_pixels_batch, pixels_batch)
-                total_loss = total_loss + lpips_loss * lpips_weight
-
             # compute loss and perform gradient update
             # Main, specular loss
             total_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch)
+
+            # LPIPS loss:
+            if stage == num_stages and lpips_weight > 0.0:
+                out_imgs = torch.reshape(specular_rendered_pixels_batch, (-1, im_h, im_w, 3))
+                out_imgs = out_imgs.permute((0, 3, 1, 2))
+                target_pixels = torch.reshape(pixels_batch, (-1, im_h, im_w, 3))
+                target_pixels = target_pixels.permute((0, 3, 1, 2))
+                lpips_loss = vgg_lpips_computer(
+                    out_imgs,
+                    target_pixels,
+                    normalize=True,
+                )
+                total_loss = total_loss + lpips_loss * lpips_weight
 
             # logging info:
             specular_loss_value = total_loss
@@ -390,7 +402,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                     loss_info_string += (
                         f"diffuse_loss: {diffuse_loss_value.item(): .3f} "
                         f"diffuse_psnr: {diffuse_psnr_value.item(): .3f} "
-                        f"total_loss: {total_loss: .3f} "
+                        f"total_loss: {total_loss.item(): .3f} "
                     )
                 if stage == num_stages and lpips_weight > 0.0:
                     loss_info_string += (

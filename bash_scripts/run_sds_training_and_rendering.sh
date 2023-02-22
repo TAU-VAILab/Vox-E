@@ -38,6 +38,6 @@ train_and_render() {
 scene=dog2
 prompt="a render of a cute light gray dog wearing sunglasses"
 directional=False
-log_name="sunglasses" # 1-word description of the prompt for saving
+log_name="big" # 1-word description of the prompt for saving
 
 train_and_render $scene "$prompt" $directional $log_name
