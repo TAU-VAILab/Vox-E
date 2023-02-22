@@ -4,7 +4,7 @@ from typing import NamedTuple, Any, Dict, Callable, Optional
 import torch
 from torch import Tensor
 
-from thre3d_atom.utils.constants import NUM_COORD_DIMENSIONS, NUM_COLOUR_CHANNELS
+from thre3d_atom.utils.constants import NUM_COORD_DIMENSIONS, NUM_COLOUR_CHANNELS, NUM_ATTN_CHANNELS
 from thre3d_atom.utils.imaging_utils import CameraBounds
 
 ExtraInfo = Dict[str, Any]  # Type for carrying/passing around extra information
@@ -82,6 +82,43 @@ class RenderOut:
             extra={key: value.to(device) for key, value in self.extra.items()},
         )
 
+@dataclasses.dataclass
+class RenderOutAttn:
+    attn: Tensor  # shape [... x NUM_COLOUR_CHANNELS]
+    depth: Tensor  # shape [... x 1]
+    extra: Optional[ExtraInfo] = None  # extra information
+
+    def __post_init__(self):
+        # make the required assertions for creating this data-type:
+        assert (
+            self.attn.shape[:-1] == self.depth.shape[:-1]
+        ), f"rendered colour maps and depth maps are shape-incompatible"
+        assert (
+            self.attn.shape[-1] == NUM_ATTN_CHANNELS
+        ), f"Sorry, spectral rendering is not supported atm. Only RGB colours are possible"
+        assert (
+            self.depth.shape[-1] == 1
+        ), f"Sorry, depth map should only have 1 dimensional data channel"
+
+        # convert extra into an empty dict if it's defaulted to None:
+        if self.extra is None:
+            self.extra = {}
+
+    def detach(self) -> Any:
+        """shorthand to detach all the rendered output tensors from pytorch-diff-graph"""
+        return RenderOutAttn(
+            attn=self.attn.detach(),
+            depth=self.depth.detach(),
+            extra={key: value.detach() for key, value in self.extra.items()},
+        )
+
+    def to(self, device: torch.device) -> Any:
+        """shorthand to move the rendered output around GPU and CPU"""
+        return RenderOutAttn(
+            attn=self.attn.to(device),
+            depth=self.depth.to(device),
+            extra={key: value.to(device) for key, value in self.extra.items()},
+        )
 
 class SampledPointsOnRays(NamedTuple):
     # Note the dimensions as follows. These are expected as it is
@@ -132,3 +169,37 @@ def render(
     processed_points = point_processor_fn(sampled_points, rays)
     rendered_output = accumulator_fn(processed_points, rays)
     return rendered_output
+
+def render_attn(
+    rays: Rays,
+    camera_bounds: CameraBounds,
+    num_samples: int,
+    sampler_fn: RaySamplerFunction,
+    point_processor_fn: PointProcessorFunction,
+    accumulator_fn: AccumulatorFunction,
+) -> RenderOutAttn:
+    """
+    Defines the overall flow of execution of the differentiable
+    volumetric rendering process. Please note that this interface has been
+    designed to allow enough flexibility in the rendering process.
+    Note that this render interface strongly assumes ``FLAT RAYS''.
+    This is done to make the interface consistent and debugging easier
+    Args:
+        rays: virtual casted rays (origins and directions). Aka, ray-marching probes
+        camera_bounds: SceneBounds (near and far) of the scene being rendered
+        num_samples: number of points sampled on the rays
+        sampler_fn: function that maps from casted rays to sampled points on the rays.
+        point_processor_fn: function to process the points on the rays.
+        accumulator_fn: function that accumulates the processed points into rendered
+                        output.
+    Returns: rendered output (rgb, depth and extra information)
+    """
+    assert (
+        len(rays.origins.shape) == len(rays.directions.shape) == 2
+    ), f"Please note that the RENDER interface only works with FLAT RAYS!"
+
+    sampled_points = sampler_fn(rays, camera_bounds, num_samples)
+    processed_points = point_processor_fn(sampled_points, rays)
+    rendered_output = accumulator_fn(processed_points, rays)
+    return rendered_output
+

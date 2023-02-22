@@ -9,10 +9,10 @@ from easydict import EasyDict
 from torch.backends import cudnn
 
 from thre3d_atom.data.datasets import PosedImagesDataset
-from thre3d_atom.modules.sds_trainer import train_sh_vox_grid_vol_mod_with_posed_images_and_sds
+from thre3d_atom.modules.attn_grid_trainer import train_attn_grid
 from thre3d_atom.modules.volumetric_model import (
     VolumetricModel,
-    create_volumetric_model_from_saved_model,
+    create_volumetric_model_from_saved_model_attn,
 )
 from thre3d_atom.rendering.volumetric.utils.misc import (
     compute_expected_density_scale_for_relu_field_grid,
@@ -22,7 +22,8 @@ from thre3d_atom.thre3d_reprs.renderers import (
     SHVoxGridRenderConfig,
 )
 
-from thre3d_atom.thre3d_reprs.voxels import VoxelGrid, VoxelSize, VoxelGridLocation, create_voxel_grid_from_saved_info_dict
+from thre3d_atom.thre3d_reprs.voxels import VoxelGrid, VoxelSize, VoxelGridLocation, \
+    create_voxel_grid_from_saved_info_dict_attn
 from thre3d_atom.utils.constants import NUM_COLOUR_CHANNELS
 from thre3d_atom.utils.logging import log
 from thre3d_atom.utils.misc import log_config_to_disk
@@ -43,25 +44,26 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # fmt: off
 # noinspection PyUnresolvedReferences
 @click.command()
-
 # Required arguments:
 @click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path to the input dataset")
-@click.option("-i", "--high_res_model_path", type=click.Path(file_okay=True, dir_okay=False),
-              required=True, help="path to the pre-trained high-res model")
+@click.option("-i", "--sds_model_path", type=click.Path(file_okay=True, dir_okay=False),
+              required=True, help="path to the pre-trained sds model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for training output")
-@click.option("-p", "--sds_prompt", type=click.STRING, required=True,
-              help="sds prompt used for SDS based loss")
-
+@click.option("-p", "--prompt", type=click.STRING, required=True,
+              help="prompt used for attention")
+@click.option("-idx", "--indices_to_attn", type=click.INT, required=True,
+              help="indices to apply attention to")
+@click.option("-t", "--timestamp", type=click.INT, required=True,
+              help="diffusion_timestamp")
 # Input dataset related arguments:
 @click.option("--separate_train_test_folders", type=click.BOOL, required=False,
-              default=True, help="whether the data directory has separate train and test folders", 
+              default=True, help="whether the data directory has separate train and test folders",
               show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
               default=4.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
-
 # Voxel-grid related arguments:
 @click.option("--grid_dims", type=click.INT, nargs=3, required=False, default=(128, 128, 128),
               help="dimensions (#voxels) of the grid along x, y and z axes", show_default=True)
@@ -78,14 +80,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # -------------------------------------------------------------------------------------
 #                        !!! :) MOST IMPORTANT OPTION :) !!!                          |
 # -------------------------------------------------------------------------------------
-@click.option("--use_relu_field", type=click.BOOL, required=False, default=True,    # |
-              help="whether to use relu_fields or revert to traditional grids",     # |
-              show_default=True)                                                    # |              
+@click.option("--use_relu_field", type=click.BOOL, required=False, default=True,  # |
+              help="whether to use relu_fields or revert to traditional grids",  # |
+              show_default=True)  # |
 # -------------------------------------------------------------------------------------
 
 @click.option("--use_softplus_field", type=click.BOOL, required=False, default=True,
               help="whether to use softplus_field or relu_field", show_default=True)
-
 # Rendering related arguments:
 @click.option("--render_num_samples_per_ray", type=click.INT, required=False, default=1024,
               help="number of samples taken per ray during rendering", show_default=True)
@@ -102,13 +103,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=5000,
+@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=1000,
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
 @click.option("--learning_rate", type=click.FLOAT, required=False, default=0.025,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
-@click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=5000*100,
+@click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=5000 * 100,
               help="number of iterations after which lr is exponentially decayed per stage", show_default=True)
 @click.option("--lr_decay_gamma_per_stage", type=click.FLOAT, required=False, default=0.1,
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
@@ -122,17 +123,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--num_workers", type=click.INT, required=False, default=4,
               help="number of worker processes used for loading the data using the dataloader"
                    "note that this will be ignored if GPU-caching of the data is successful :)", show_default=True)
-
 # Various frequencies:
 @click.option("--save_frequency", type=click.INT, required=False, default=250,
               help="number of iterations after which a model is saved", show_default=True)
 @click.option("--test_frequency", type=click.INT, required=False, default=250,
               help="number of iterations after which test metrics are computed", show_default=True)
-@click.option("--feedback_frequency", type=click.INT, required=False, default=100,
+@click.option("--feedback_frequency", type=click.INT, required=False, default=1000,
               help="number of iterations after which rendered feedback is generated", show_default=True)
 @click.option("--summary_frequency", type=click.INT, required=False, default=50,
               help="number of iterations after which training-loss/other-summaries are logged", show_default=True)
-
 # Miscellaneous modes
 @click.option("--verbose_rendering", type=click.BOOL, required=False, default=False,
               help="whether to show progress while rendering feedback during training"
@@ -140,52 +139,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--fast_debug_mode", type=click.BOOL, required=False, default=False,
               help="whether to use the fast debug mode while training "
                    "(skips testing and some lengthy visualizations)", show_default=True)
-
 # sds specific stuff
-@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.0000001,
-              help="diffuse weight used for regularization", show_default=True)
-@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.0000001,
-              help="specular weight used for regularization", show_default=True)
-@click.option("--directional_dataset", type=click.BOOL, required=False, default=False,
+@click.option("--directional_dataset", type=click.BOOL, required=False, default=True,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
-               show_default=True)
+              show_default=True)
 @click.option("--use_uncertainty", type=click.BOOL, required=False, default=False,
               help="whether to use an uncertainty aware type loss",
-               show_default=True)
+              show_default=True)
 @click.option("--new_frame_frequency", type=click.INT, required=False, default=1,
               help="number of iterations where we work on the same pose", show_default=True)
-@click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=0.0,
-              help="weight for density correlation loss", show_default=True)
-@click.option("--l1", type=click.BOOL, required=False, default=False,
-              help="l1 loss", show_default=True)
-@click.option("--dcl", type=click.BOOL, required=False, default=False,
-              help="dcl loss", show_default=True)
-@click.option("--avg", type=click.BOOL, required=False, default=False,
-              help="avg color and density", show_default=True)
-@click.option("--two_way", type=click.BOOL, required=False, default=False,
-              help="two way optimization", show_default=True)
-@click.option("--lbo", type=click.BOOL, required=False, default=False,
-              help="lower_branch", show_default=True)
-@click.option("--weight_schedule", type=click.BOOL, required=False, default=False,
-              help="lower_branch", show_default=True)
-@click.option("--rec_loss_weight", type=click.FLOAT, required=False, default=0.0,
-              help="weight for reconstruction loss", show_default=True)
-@click.option("--indices_to_alter", type=click.INT, required=False, default=7,
-              help="indices_to_alter", show_default=True)
-@click.option("--show_attn", type=click.BOOL, required=False, default=False,
-              help="show attention maps", show_default=True)
-@click.option("--edited_prompt", type=click.STRING, required=False, default='',
-              help="edited_prompt for P2P")
-@click.option("--blend_word", type=click.STRING, required=False, default='',
-              help="word for local blend")
-@click.option("--extra_noise", type=click.BOOL, required=False, default=False,
-              help="calc_noise")
-@click.option("--extra_attn", type=click.STRING, required=False, default='',
-              help="extra_attn")
-@click.option("--controllers", type=click.BOOL, required=False, default=False,
-              help="use input image controllers")
-
-
+@click.option("--attn_weight", type=click.INT, required=False, default=10,
+              help="number of iterations where we work on the same pose", show_default=True)
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -199,7 +163,7 @@ def main(**kwargs) -> None:
                id=wandb.util.generate_id())
     # parse os-checked path-strings into Pathlike Paths :)
     data_path = Path(config.data_path)
-    model_path = Path(config.high_res_model_path)
+    model_path = Path(config.sds_model_path)
     output_path = Path(config.output_path)
 
     # save a copy of the configuration for reference
@@ -207,16 +171,13 @@ def main(**kwargs) -> None:
     log_config_to_disk(config, output_path)
 
     if config.separate_train_test_folders:
-        train_dataset, test_dataset = (
-            PosedImagesDataset(
-                images_dir=data_path / mode,
-                camera_params_json=data_path / f"{mode}_camera_params.json",
+        train_dataset = PosedImagesDataset(
+                images_dir=data_path / 'train',
+                camera_params_json=data_path / f"train_camera_params.json",
                 normalize_scene_scale=config.normalize_scene_scale,
                 downsample_factor=config.data_downsample_factor,
                 rgba_white_bkgd=config.white_bkgd,
             )
-            for mode in ("train", "test")
-        )
     else:
         train_dataset = PosedImagesDataset(
             images_dir=data_path / "images",
@@ -227,21 +188,20 @@ def main(**kwargs) -> None:
         )
         test_dataset = None
 
-    pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
+    vol_mod, _ = create_volumetric_model_from_saved_model_attn(
         model_path=model_path,
-        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
+        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
         device=device,
     )
 
-    sds_vol_mod = copy.deepcopy(pretrained_vol_mod)
-
     # train the model:
-    train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
-        sds_vol_mod=sds_vol_mod,
-        pretrained_vol_mod=pretrained_vol_mod,
+    train_attn_grid(
+        vol_mod=vol_mod,
         train_dataset=train_dataset,
         output_dir=output_path,
-        test_dataset=test_dataset,
+        prompt=config.prompt,
+        indices_to_attn= [config.indices_to_attn],
+        timestamp=config.timestamp,
         ray_batch_size=config.ray_batch_size,
         num_stages=config.num_stages,
         num_iterations_per_stage=config.num_iterations_per_stage,
@@ -251,34 +211,16 @@ def main(**kwargs) -> None:
         lr_decay_steps_per_stage=config.lr_decay_steps_per_stage,
         stagewise_lr_decay_gamma=config.stagewise_lr_decay_gamma,
         save_freq=config.save_frequency,
-        test_freq=config.test_frequency,
         feedback_freq=config.feedback_frequency,
         summary_freq=config.summary_frequency,
         apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         fast_debug_mode=config.fast_debug_mode,
-        diffuse_weight=config.diffuse_weight,
-        specular_weight=config.specular_weight,
-        sds_prompt=config.sds_prompt,
         directional_dataset=config.directional_dataset,
         use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
-        density_correlation_weight=config.density_correlation_weight,
-        l1=config.l1,
-        dcl=config.dcl,
-        avg=config.avg,
-        two_way=config.two_way,
-        lbo=config.lbo,
-        weight_schedule=config.weight_schedule,
-        rec_loss_weight=config.rec_loss_weight,
-        indices_to_alter = [config.indices_to_alter],
-        show_attn=config.show_attn,
-        edited_prompt=config.edited_prompt,
-        blend_word=config.blend_word,
-        extra_noise=config.extra_noise,
-        extra_attn=config.extra_attn,
-        controllers=config.controllers
+        attn_weight=config.attn_weight
     )
 
 

@@ -9,6 +9,7 @@ import imageio
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm, colors
 from torch import Tensor
 from torch.nn.functional import l1_loss, mse_loss
 from torch.utils.data import DataLoader
@@ -26,12 +27,13 @@ from thre3d_atom.rendering.volumetric.utils.misc import (
     sample_rays_directions_and_pixels_synchronously,
     flatten_rays,
 )
-from thre3d_atom.thre3d_reprs.renderers import render_sh_voxel_grid
+from thre3d_atom.thre3d_reprs.cross_attn import text_under_image
+from thre3d_atom.thre3d_reprs.renderers import render_sh_voxel_grid, render_sh_voxel_grid_attn
 from thre3d_atom.thre3d_reprs.voxels import (
     VoxelGrid,
-    scale_voxel_grid_with_required_output_size,
+    scale_voxel_grid_with_required_output_size, scale_voxel_grid_with_required_output_size_attn,
 )
-from thre3d_atom.thre3d_reprs.sd import scoreDistillationLoss
+from thre3d_atom.thre3d_reprs.sd import scoreDistillationLoss, StableDiffusion
 from thre3d_atom.utils.constants import (
     CAMERA_BOUNDS,
     CAMERA_INTRINSICS,
@@ -45,7 +47,7 @@ from thre3d_atom.utils.metric_utils import mse2psnr
 from thre3d_atom.utils.misc import compute_thre3d_grid_sizes
 from thre3d_atom.visualizations.static import (
     visualize_camera_rays,
-    visualize_sh_vox_grid_vol_mod_rendered_feedback,
+    visualize_sh_vox_grid_vol_mod_rendered_feedback, visualize_sh_vox_grid_vol_mod_rendered_feedback_attn,
 )
 
 dir_to_num_dict = {'side': 0, 'overhead': 1, 'back': 2, 'front': 3}
@@ -54,17 +56,14 @@ dir_to_num_dict = {'side': 0, 'overhead': 1, 'back': 2, 'front': 3}
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
 
-def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
-        sds_vol_mod: VolumetricModel,
-        pretrained_vol_mod: VolumetricModel,
+def train_attn_grid(
+        vol_mod: VolumetricModel,
         train_dataset: PosedImagesDataset,
         # required arguments:
         output_dir: Path,
-        # optional arguments:)
-        random_initializer: Callable[[Tensor], Tensor] = partial(
-            torch.nn.init.uniform_, a=-1.0, b=1.0
-        ),
-        test_dataset: Optional[PosedImagesDataset] = None,
+        prompt,
+        indices_to_attn,
+        timestamp,
         image_batch_cache_size: int = 8,
         ray_batch_size: int = 32768,
         num_stages: int = 1,
@@ -79,36 +78,18 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         render_feedback_pose: Optional[CameraPose] = None,
         # various training-loop frequencies
         save_freq: int = 1000,
-        test_freq: int = 1000,
         feedback_freq: int = 100,
         summary_freq: int = 10,
         # regularization option:
-        apply_diffuse_render_regularization: bool = True,
+        apply_diffuse_render_regularization: bool = False,
         # miscellaneous options can be left untouched
         num_workers: int = 4,
         verbose_rendering: bool = True,
         fast_debug_mode: bool = False,
-        diffuse_weight: float = 0.001,
-        specular_weight: float = 0.001,
-        sds_prompt: str = "none",
         directional_dataset: bool = False,
         use_uncertainty: bool = False,
         new_frame_frequency: int = 1,
-        density_correlation_weight: float = 0.0,
-        l1: bool = False,
-        dcl: bool = False,
-        avg: bool = False,
-        two_way: bool = False,
-        lbo: bool = False,
-        weight_schedule: bool = False,
-        rec_loss_weight: float = 0.0,
-        indices_to_alter: list = [7],
-        show_attn: bool = False,
-        edited_prompt: str = '',
-        blend_word: str = '',
-        extra_noise: bool = False,
-        extra_attn: str = '',
-        controllers: bool = False
+        attn_weight: int = 1
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -146,28 +127,26 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     Returns: the trained version of the VolumetricModel. Also writes multiple assets to disk
     """
     # assertions about the VolumetricModel being used with this TrainProcedure :)
-    assert isinstance(sds_vol_mod.thre3d_repr, VoxelGrid), (
-        f"sorry, cannot use a {type(sds_vol_mod.thre3d_repr)} with this TrainProcedure :(; "
+    assert isinstance(vol_mod.thre3d_repr, VoxelGrid), (
+        f"sorry, cannot use a {type(vol_mod.thre3d_repr)} with this TrainProcedure :(; "
         f"only a {type(VoxelGrid)} can be used"
     )
     assert (
-            sds_vol_mod.render_procedure == render_sh_voxel_grid
+            vol_mod._render_procedure_attn == render_sh_voxel_grid_attn
     ), f"sorry, non SH-based VoxelGrids cannot be used with this TrainProcedure"
 
     assert (
-            sds_prompt != "none"
+            prompt != "none"
     ), f"sorry, you have to supply a text prompt to use SDS"
 
     # init sds loss class
-    prompts = [sds_prompt, edited_prompt] if len(edited_prompt) > 0 else sds_prompt
-    sds_loss = scoreDistillationLoss(sds_vol_mod.device, prompts, directional=directional_dataset,
-                                     blend_word=blend_word)
+    sd_model = StableDiffusion(vol_mod.device, "1.4")
     direction_batch = None
     selected_idx_in_batch = [0]
 
     # fix the sizes of the feature grids at different stages
     stagewise_voxel_grid_sizes = compute_thre3d_grid_sizes(
-        final_required_resolution=sds_vol_mod.thre3d_repr.grid_dims,
+        final_required_resolution=vol_mod.thre3d_repr.grid_dims,
         num_stages=num_stages,
         scale_factor=scale_factor,
     )
@@ -185,7 +164,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     # setup render_feedback_pose
     real_feedback_image = None
     if render_feedback_pose is None:
-        feedback_dataset = test_dataset if test_dataset is not None else train_dataset
+        feedback_dataset = train_dataset
         render_feedback_pose = CameraPose(
             rotation=feedback_dataset[-1][1][:, :3].cpu().numpy(),
             translation=feedback_dataset[-1][1][:, 3:].cpu().numpy(),
@@ -194,11 +173,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
     train_dl = _make_dataloader_from_dataset(
         train_dataset, image_batch_cache_size, num_workers
-    )
-    test_dl = (
-        _make_dataloader_from_dataset(test_dataset, 1, num_workers)
-        if test_dataset is not None
-        else None
     )
 
     # dataset size aka number of total pixels
@@ -267,16 +241,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         # setup volumetric_model's optimizer
         current_stage_lr = learning_rate * (stagewise_lr_decay_gamma ** (stage - 1))
 
-        if lbo:
-            params = [{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
-        else:
-            params = [{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr},
-                      {"params": pretrained_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
+        params = [{"params": vol_mod.thre3d_repr.attn, "lr": current_stage_lr}]
 
         ## add logvars to optimizeable parameters if required
         if use_uncertainty:
             num_poses = len(train_dataset)
-            logvars = torch.nn.Parameter(torch.zeros(num_poses, device=sds_vol_mod.device))
+            logvars = torch.nn.Parameter(torch.zeros(num_poses, device=vol_mod.device))
             params.append({{"params": logvars, "lr": current_stage_lr}})
 
         optimizer = torch.optim.Adam(
@@ -296,7 +266,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         )
         log.info(
             f"training stage: {stage}   "
-            f"voxel grid resolution: {sds_vol_mod.thre3d_repr.grid_dims} "
+            f"voxel grid resolution: {vol_mod.thre3d_repr.grid_dims} "
             f"training images resolution: [{train_image_height} x {train_image_width}]"
         )
         current_stage_lrs = [
@@ -317,10 +287,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # please check the `data.datasets` module
             total_loss = 0
             global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
-            if global_step % 1000 == 0:
-                a = 1
-            if weight_schedule and global_step % 1000 == 0:
-                density_correlation_weight *= 10
             if global_step % new_frame_frequency == 0 or global_step == 1:
                 images, poses, indices = next(infinite_train_dl)
 
@@ -331,7 +297,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     unflattened_rays = cast_rays(
                         current_stage_train_dataset.camera_intrinsics,
                         CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
-                        device=sds_vol_mod.device,
+                        device=vol_mod.device,
                     )
                     casted_rays = flatten_rays(unflattened_rays)
                     rays_list.append(casted_rays)
@@ -348,125 +314,74 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     unflattened_rays, images, indices, batch_size_in_images
                 )
 
+                pose = poses[selected_idx_in_batch]
+                pose = CameraPose(
+                    rotation=pose[-1][:, :3].cpu().numpy(),
+                    translation=pose[-1][:, 3:].cpu().numpy(),
+                )
+                rendered_output = vol_mod.render(
+                    pose,
+                    camera_intrinsics,
+                    gpu_render=False,
+                    verbose=False,
+                )
+
                 # log inputs
-                wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
                 if directional_dataset:
                     direction_batch = get_dir_batch_from_poses(poses[selected_idx_in_batch])
-                    # while direction_batch[0] != 'front' and direction_batch[0] != 'overhead':
-                    #    images, poses, indices = next(infinite_train_dl)
-                    #    rays_list = []
-                    #    unflattened_rays_list = []
-                    #    for pose in poses:
-                    #        unflattened_rays = cast_rays(
-                    #                current_stage_train_dataset.camera_intrinsics,
-                    #                CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
-                    #                device=sds_vol_mod.device,
-                    #            )
-                    #        casted_rays = flatten_rays(unflattened_rays)
-                    #        rays_list.append(casted_rays)
-                    #        unflattened_rays_list.append(unflattened_rays)
-
-                    #    unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
-                    #    rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
-                    #            unflattened_rays, images, indices, batch_size_in_images
-                    #    )
-                    #    direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
-                    wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
+                    wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}  , step=global_step)
+                out_imgs = rendered_output.colour.unsqueeze(0)
+                out_imgs = out_imgs.permute((0, 3, 1, 2)).to(vol_mod.device)
+                m_prompt = prompt + f", {direction_batch} view"
+                gt, t = sd_model.get_attn_map(prompt=[m_prompt], pred_rgb=out_imgs, timestamp=timestamp,
+                                              indices_to_alter=indices_to_attn)
+                cmp = cm.get_cmap('jet')
+                norm = colors.Normalize(vmin=0, vmax=torch.max(gt).item())
+                attn_frame = cmp(norm(gt.cpu()))[:, :, :3]
+                wandb.log({"Input Image": wandb.Image(rendered_output.colour.numpy())}, step=global_step)
+                wandb.log({"GT Attn Map": wandb.Image(attn_frame)}, step=global_step)
+                # input_attn_im = (0.5 * rendered_output.colour.numpy()) + (0.5 * attn_frame)
+                # input_attn_im = to8b(input_attn_im)
+                # input_attn_im = text_under_image(input_attn_im, "{}".format(direction_batch))
+                # wandb.log({"Input Im Attn Map": wandb.Image(input_attn_im)}, step=global_step)
 
             # render a small chunk of rays and compute a loss on it
-            specular_rendered_batch_sds = sds_vol_mod.render_rays(rays_batch)
-            specular_rendered_pixels_batch_sds = specular_rendered_batch_sds.colour
-            if not lbo:
-                specular_rendered_batch_pretrained = pretrained_vol_mod.render_rays(rays_batch)
-                specular_rendered_pixels_batch_pretrained = specular_rendered_batch_pretrained.colour
+            specular_rendered_batch = vol_mod.render_rays_attn(rays_batch)
+            specular_rendered_pixels_batch_attn = specular_rendered_batch.attn
+            # pred_attn_frame = specular_rendered_pixels_batch_attn.clone().cpu().detach().numpy().reshape(gt.shape)
+            # pred_attn_frame = 1 - pred_attn_frame
+            # norm_pred = colors.Normalize(vmin=np.min(pred_attn_frame), vmax=np.max(pred_attn_frame))
+            # pred_attn_frame = cmp(norm_pred(pred_attn_frame))[:, :, :3]
+            # pred_attn_frame_save = (0.5 * pred_attn_frame) + (0.5 * rendered_output.colour.numpy())
+            # wandb.log({"Pred IM Attn Map": wandb.Image(to8b(pred_attn_frame_save))}, step=global_step)
 
-            # run sds loss training step!
             if use_uncertainty:
                 logvars_batch = logvars[index_batch]
                 total_loss = total_loss + torch.mean(logvars_batch)
             else:
                 logvars_batch = None
-
-            if not show_attn:
-                indices_to_alter = None
-            sds_l, attn_maps = sds_loss.training_step(indices_to_alter, specular_rendered_pixels_batch_sds,
-                                                      im_h, im_w, global_step,
-                                                      directions=direction_batch,
-                                                      logvars=logvars_batch, extra_noise=extra_noise,
-                                                      extra_attn=extra_attn, controllers=controllers, input_idx=index_batch[0].item())
-            total_loss = total_loss + sds_l
-
-            rec_loss = 0
-            if rec_loss_weight != 0:
-                masks = [a[1] for a in attn_maps]
-                pred = torch.reshape(specular_rendered_pixels_batch_sds, (-1, im_h, im_w, 3))
-                pred = pred.permute((0, 3, 1, 2))
-                gt = torch.reshape(pixels_batch, (-1, im_h, im_w, 3)).detach()
-                gt = gt.permute((0, 3, 1, 2))
-                for i, attn_mask in enumerate(masks):
-                    mask = (1 - attn_mask).detach()
-                    pred_m = torch.mul(pred, mask)
-                    gt_m = torch.mul(gt, mask)
-                    mask_diff = torch.abs(gt_m - pred_m)[0][0].detach()
-                    mask_im = mask_diff / torch.max(mask_diff)
-                    wandb.log({"Diff Image for {}".format(sds_prompt[indices_to_alter[i]]): wandb.Image(
-                        mask_im.cpu().numpy())}, step=global_step)
-                    rec_loss = l1_loss(gt_m, pred_m)
-                rec_loss = rec_loss / len(masks)
-                total_loss = total_loss + rec_loss * rec_loss_weight
-
-            # compute loss and perform gradient update
-            # Main, specular loss
-            specular_loss_value = 0
-            diffuse_loss_value = 0
-            specular_psnr_value = 0
-            diffuse_psnr_value = 0
-            if not lbo:
-                specular_loss_value = l1_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
-                total_loss = total_loss + specular_loss_value * specular_weight
-
-                # logging info:
-                specular_psnr_value = mse2psnr(
-                    mse_loss(specular_rendered_pixels_batch_pretrained, pixels_batch)
-                )
-
-                # Diffuse render loss, for better and stabler geometry extraction if requested:
-                diffuse_loss_value, diffuse_psnr_value = 0, 0
-                if apply_diffuse_render_regularization:
-                    # render only the diffuse version for the rays
-                    diffuse_rendered_batch_pretrained = pretrained_vol_mod.render_rays(
-                        rays_batch, render_diffuse=True
-                    )
-                    diffuse_rendered_pixels_batch_pretrained = diffuse_rendered_batch_pretrained.colour
-
-                    # compute diffuse loss
-                    diffuse_loss = l1_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
-                    total_loss = total_loss + diffuse_loss * diffuse_weight
-
-                    # logging info:
-                    diffuse_loss_value = diffuse_loss
-                    diffuse_psnr_value = mse2psnr(
-                        mse_loss(diffuse_rendered_pixels_batch_pretrained, pixels_batch)
-                    )
-
-            ### insert losses that tie them together here ###
-            density_correlation_loss = 0.0
-            if density_correlation_weight != 0.0:
-                # density_correlation_loss = _density_correlation_loss(sds_vol_mod=sds_vol_mod,
-                #                                                      regular_vol_mod=pretrained_vol_mod)
-                if avg:
-                    if l1:
-                        l1d = l1_loss(sds_vol_mod.thre3d_repr._densities,
-                                      pretrained_vol_mod.thre3d_repr._densities.detach())
-                        l1c = l1_loss(sds_vol_mod.thre3d_repr._features,
-                                      pretrained_vol_mod.thre3d_repr._features.detach())
-                        total_loss = total_loss + ((l1c + l1d) / 2) * density_correlation_weight
-                else:
-                    if dcl:
-                        density_correlation_loss = _density_correlation_loss(sds_vol_mod=sds_vol_mod,
-                                                                             regular_vol_mod=pretrained_vol_mod,
-                                                                             two_way=two_way)
-                        total_loss = total_loss + density_correlation_loss * density_correlation_weight
+            specular_rendered_pixels_batch_attn = 1 - specular_rendered_pixels_batch_attn.reshape(gt.shape)
+            norm = colors.Normalize(vmin=0, vmax=torch.max(specular_rendered_pixels_batch_attn).item())
+            pred_attn_frame = cmp(norm(specular_rendered_pixels_batch_attn.cpu().detach().numpy()))[:, :, :3]
+            wandb.log({"Pred Attn Map": wandb.Image(pred_attn_frame)}, step=global_step)
+            filtered_idxs = torch.nonzero(
+                torch.where(specular_rendered_pixels_batch_attn > 0.1, specular_rendered_pixels_batch_attn, 0),
+                as_tuple=True)
+            mask = torch.zeros_like(gt)
+            mask[filtered_idxs] = 1
+            norm = colors.Normalize(vmin=0, vmax=torch.max(mask).item())
+            mask_frame = cmp(norm(mask.cpu()))[:, :, :3]
+            wandb.log({"Mask": wandb.Image(mask_frame)},step=global_step)
+            diff = torch.abs(specular_rendered_pixels_batch_attn - torch.clamp(gt * attn_weight,0,1))
+            norm = colors.Normalize(vmin=0, vmax=torch.max(diff).item())
+            diff_frame = cmp(norm(diff.cpu().detach().numpy()))[:, :, :3]
+            wandb.log({"Diff": wandb.Image(diff_frame)},step=global_step)
+            diff_masked = torch.mul(diff, mask)
+            norm = colors.Normalize(vmin=0, vmax=torch.max(diff_masked).item())
+            diff_mask_frame = cmp(norm(diff.cpu().detach().numpy()))[:, :, :3]
+            wandb.log({"Diff Masked": wandb.Image(diff_mask_frame)},step=global_step)
+            attn_loss = torch.mean(diff_masked) * (torch.numel(gt) / mask.sum())
+            total_loss = total_loss + attn_loss
 
             # optimization steps:
             total_loss.backward()
@@ -476,22 +391,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # wandb logging:
             if use_uncertainty:
                 _log_variances_in_wandb(logvars, global_step)
-            if not lbo:
-                wandb.log({"specular_loss": specular_loss_value}, step=global_step)
-                wandb.log({"diffuse_loss": diffuse_loss_value}, step=global_step)
-            # wandb.log(
-            #     {"density_correlation_loss": density_correlation_loss.item() if density_correlation_weight != 0 else 0},
-            #     step=global_step)
-            if avg:
-                if l1:
-                    wandb.log({"avg_loss": (l1d + l1c / 2)}, step=global_step)
-            else:
-                if dcl:
-                    wandb.log({"dcl_loss": density_correlation_loss}, step=global_step)
-            if not lbo:
-                wandb.log({"specular_psnr": specular_psnr_value}, step=global_step)
-                wandb.log({"diffuse_psnr": diffuse_psnr_value}, step=global_step)
-            wandb.log({"rec_loss": rec_loss}, step=global_step)
+            wandb.log({"attn_loss": attn_loss}, step=global_step)
             wandb.log({"total_loss": total_loss}, step=global_step)
             wandb.log({"first selected indx in batch": index_batch[0]}, step=global_step)
 
@@ -507,10 +407,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     or stage_iteration == num_iterations_per_stage
             ):
                 for summary_name, summary_value in (
-                        ("specular_loss", specular_loss_value),
-                        ("diffuse_loss", diffuse_loss_value),
-                        ("specular_psnr", specular_psnr_value),
-                        ("diffuse_psnr", diffuse_psnr_value),
+                        ("attn_loss", attn_loss),
                         ("total_loss", total_loss),
                         ("num_epochs", (ray_batch_size * global_step) / dataset_size),
                 ):
@@ -529,17 +426,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"Stage: {stage} "
                     f"Global Iteration: {global_step} "
                     f"Stage Iteration: {stage_iteration} "
-                    f"specular_loss: {specular_loss_value.item() if not lbo else 0: .3f} "
-                    f"specular_psnr: {specular_psnr_value.item() if not lbo else 0: .3f} "
+                    f"attn_loss: {attn_loss.item(): .3f} "
                 )
-
-                diff_val = diffuse_loss_value.detach().item() if not lbo else 0
-                if apply_diffuse_render_regularization:
-                    loss_info_string += (
-                        f"diffuse_loss: {diff_val if not lbo else 0: .3f} "
-                        f"diffuse_psnr: {diffuse_psnr_value.item() if not lbo else 0: .3f} "
-                        f"total_loss: {total_loss.item(): .3f} "
-                    )
                 log.info(loss_info_string)
 
             # step the learning rate schedulers
@@ -565,55 +453,21 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                         translation=train_dataset[index_batch[0]][1][:, 3:].cpu().numpy(),
                     )
 
-                    visualize_sh_vox_grid_vol_mod_rendered_feedback(
-                        vol_mod=sds_vol_mod,
-                        vol_mod_name="sds",
+                    visualize_sh_vox_grid_vol_mod_rendered_feedback_attn(
+                        vol_mod=vol_mod,
+                        vol_mod_name="attn",
                         render_feedback_pose=render_feedback_pose,
                         camera_intrinsics=camera_intrinsics,
                         global_step=global_step,
                         feedback_logs_dir=render_dir,
-                        parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
+                        parallel_rays_chunk_size=vol_mod.render_config.parallel_rays_chunk_size,
                         training_time=time_spent_actually_training,
                         log_diffuse_rendered_version=apply_diffuse_render_regularization,
                         use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
-                        overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
-                        verbose_rendering=verbose_rendering,
-                        log_wandb=True,
-                        attn_maps=[a[0] for a in attn_maps] if attn_maps is not None else None
-                    )
-
-                    visualize_sh_vox_grid_vol_mod_rendered_feedback(
-                        vol_mod=pretrained_vol_mod,
-                        vol_mod_name="pretrained",
-                        render_feedback_pose=render_feedback_pose,
-                        camera_intrinsics=camera_intrinsics,
-                        global_step=global_step,
-                        feedback_logs_dir=render_dir,
-                        parallel_rays_chunk_size=sds_vol_mod.render_config.parallel_rays_chunk_size,
-                        training_time=time_spent_actually_training,
-                        log_diffuse_rendered_version=apply_diffuse_render_regularization,
-                        use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
-                        overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
+                        overridden_num_samples_per_ray=vol_mod.render_config.render_num_samples_per_ray,
                         verbose_rendering=verbose_rendering,
                         log_wandb=True,
                     )
-
-            # obtain and log the test metrics
-            if (
-                    test_dl is not None
-                    and not fast_debug_mode
-                    and (
-                    global_step % test_freq == 0
-                    or stage_iteration == num_iterations_per_stage
-            )
-            ):
-                test_sh_vox_grid_vol_mod_with_posed_images(
-                    vol_mod=sds_vol_mod,
-                    test_dl=test_dl,
-                    parallel_rays_chunk_size=ray_batch_size,
-                    tensorboard_writer=tensorboard_writer,
-                    global_step=global_step,
-                )
 
             # save the model
             if (
@@ -625,7 +479,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     f"saving model-snapshot at stage {stage}, global step {global_step}"
                 )
                 torch.save(
-                    sds_vol_mod.get_save_info(
+                    vol_mod.get_save_info(
                         extra_info={
                             CAMERA_BOUNDS: camera_bounds,
                             CAMERA_INTRINSICS: camera_intrinsics,
@@ -645,8 +499,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # upsample the feature-grid after the completion of the stage:
             with torch.no_grad():
                 # noinspection PyTypeChecker
-                sds_vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
-                    sds_vol_mod.thre3d_repr,
+                vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size_attn(
+                    vol_mod.thre3d_repr,
                     output_size=stagewise_voxel_grid_sizes[stage],
                     mode="trilinear",
                 )
@@ -655,7 +509,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     # save the final trained model
     log.info(f"Saving the final model-snapshot :)! Almost there ... yay!")
     torch.save(
-        sds_vol_mod.get_save_info(
+        vol_mod.get_save_info(
             extra_info={
                 "camera_bounds": camera_bounds,
                 "camera_intrinsics": camera_intrinsics,
@@ -670,7 +524,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     log.info(
         f"Total actual training time: {timedelta(seconds=time_spent_actually_training)}"
     )
-    return sds_vol_mod
+    return vol_mod
 
 
 def _make_dataloader_from_dataset(
@@ -708,32 +562,6 @@ def _log_variances_in_wandb(logvars, global_step):
     plt.tight_layout()
     wandb.log({"Variances per Pose": wandb.Image(plt)}, step=global_step)
     plt.close(fig)
-
-
-def _density_correlation_loss(sds_vol_mod: VolumetricModel,
-                              regular_vol_mod: VolumetricModel, two_way=False):
-    eps = 0.0000001  # for numerical stability
-
-    # Get densities (currently detach regular density):
-    sds_density = sds_vol_mod.thre3d_repr._densities
-    if not two_way:
-        regular_density = regular_vol_mod.thre3d_repr._densities.detach()
-    else:
-        regular_density = regular_vol_mod.thre3d_repr._densities
-
-    # Calculate Denominator:
-    sds_var = torch.mean((sds_density - torch.mean(sds_density)) ** 2)
-    regular_var = torch.mean((regular_density - torch.mean(regular_density)) ** 2)
-    denominator = torch.sqrt(sds_var * regular_var)
-
-    # Calculate Covariance:
-    covariance = (sds_density - torch.mean(sds_density)) * \
-                 (regular_density - torch.mean(regular_density))
-    covariance = torch.mean(covariance)
-
-    # Return Result:
-    correlation = covariance / (denominator + eps)
-    return 1.0 - correlation
 
 
 def get_dir_batch_from_poses(poses: Tensor):

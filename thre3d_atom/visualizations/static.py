@@ -2,15 +2,16 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
+import cv2
 import imageio
 import wandb
 import numpy as np
 from PIL import ImageDraw, Image
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, cm, colors
 
 from thre3d_atom.data.datasets import PosedImagesDataset
 from thre3d_atom.modules.volumetric_model import VolumetricModel
-from thre3d_atom.rendering.volumetric.render_interface import RenderOut
+from thre3d_atom.rendering.volumetric.render_interface import RenderOut, RenderOutAttn
 from thre3d_atom.rendering.volumetric.utils.misc import (
     cast_rays,
     ndcize_rays,
@@ -28,10 +29,10 @@ from thre3d_atom.utils.logging import log
 
 
 def visualize_camera_rays(
-    dataset: PosedImagesDataset,
-    output_dir: Path,
-    num_rays_per_image: int = 30,
-    do_ndcize_rays: bool = False,
+        dataset: PosedImagesDataset,
+        output_dir: Path,
+        num_rays_per_image: int = 30,
+        do_ndcize_rays: bool = False,
 ) -> None:
     all_poses = [
         dataset.extract_pose(camera_param)
@@ -81,8 +82,9 @@ def visualize_camera_rays(
 
 
 def _process_rendered_output_for_feedback_log(
-    rendered_output: RenderOut,
-    training_time: Optional[float] = None,
+        rendered_output: RenderOut,
+        training_time: Optional[float] = None,
+        attn_maps=None
 ) -> np.array:
     # obtain the colour, acc and depth maps and concatenate them side-by-side.
     colour_map = to8b(rendered_output.colour.cpu().numpy())
@@ -93,10 +95,16 @@ def _process_rendered_output_for_feedback_log(
     # invert the acc_map for better looking visualization
     acc_map = to8b(1.0 - rendered_output.extra[EXTRA_ACCUMULATED_WEIGHTS].cpu().numpy())
     acc_map = np.tile(acc_map, (1, 1, NUM_COLOUR_CHANNELS))
+    if attn_maps is not None:
+        attn_maps = [attn_map.cpu().numpy() for attn_map in attn_maps]
+        attn_maps = [attn_map - attn_map.min() for attn_map in attn_maps]
+        attn_maps = [255 * attn_map / attn_map.max() for attn_map in attn_maps]
+        attn_maps = [np.repeat(np.expand_dims(attn_map, axis=2), 3, axis=2).astype(np.uint8) for attn_map in attn_maps]
 
     text_colour = (0, 0, 0)  # use black ink by default
     feedback_image = np.concatenate(
-        [colour_map, depth_map, acc_map],
+        [colour_map, depth_map, acc_map] + [attn_map for attn_map in attn_maps] if attn_maps is not None else [
+            colour_map, depth_map, acc_map],
         axis=1,
     )
 
@@ -111,21 +119,55 @@ def _process_rendered_output_for_feedback_log(
 
     return feedback_image
 
+def _process_rendered_output_for_feedback_log_attn(
+        rendered_output_attn: RenderOutAttn,
+        rendered_output: RenderOut,
+        training_time: Optional[float] = None,
+        attn_maps=None
+) -> np.array:
+    # obtain the colour, acc and depth maps and concatenate them side-by-side.
+    colour_map = to8b(rendered_output.colour.cpu().numpy())
+    # invert the acc_map for better looking visualization
+    attn_frame = rendered_output_attn.attn.squeeze(-1).cpu().numpy()
+    attn_frame = 1- attn_frame
+    cmp=cm.get_cmap('jet')
+    norm = colors.Normalize(vmin=np.min(attn_frame), vmax=np.max(attn_frame))
+    attn_frame = cmp(norm(attn_frame))[:, :, :3]
+    attn_frame_save = (0.5 * attn_frame) + (0.5 * rendered_output.colour.cpu().numpy())
+    attn_frame = to8b(attn_frame)
+    attn_frame_save = to8b(attn_frame_save)
+    text_colour = (0, 0, 0)  # use black ink by default
+    feedback_image = np.concatenate(
+        [colour_map, attn_frame_save, attn_frame],
+        axis=1,
+    )
+
+    # add the training timestamp to the rendered feedback images if it is available:
+    if training_time is not None:
+        formatted_time_string = str(timedelta(seconds=training_time))
+        pil_feedback_image = Image.fromarray(feedback_image)
+        drawable_image = ImageDraw.Draw(pil_feedback_image)
+        drawable_image.text((10, 10), formatted_time_string, text_colour)
+        # noinspection PyTypeChecker
+        feedback_image = np.array(pil_feedback_image)
+
+    return feedback_image
 
 def visualize_sh_vox_grid_vol_mod_rendered_feedback(
-    vol_mod: VolumetricModel,
-    vol_mod_name: str,
-    render_feedback_pose: CameraPose,
-    camera_intrinsics: CameraIntrinsics,
-    global_step: int,
-    feedback_logs_dir: Path,
-    parallel_rays_chunk_size: int = 32768,
-    training_time: Optional[float] = None,
-    log_diffuse_rendered_version: bool = True,
-    use_optimized_sampling_mode: bool = False,
-    overridden_num_samples_per_ray: Optional[int] = None,
-    verbose_rendering: bool = True,
-    log_wandb: bool = False,
+        vol_mod: VolumetricModel,
+        vol_mod_name: str,
+        render_feedback_pose: CameraPose,
+        camera_intrinsics: CameraIntrinsics,
+        global_step: int,
+        feedback_logs_dir: Path,
+        parallel_rays_chunk_size: int = 32768,
+        training_time: Optional[float] = None,
+        log_diffuse_rendered_version: bool = True,
+        use_optimized_sampling_mode: bool = False,
+        overridden_num_samples_per_ray: Optional[int] = None,
+        verbose_rendering: bool = True,
+        log_wandb: bool = False,
+        attn_maps=None
 ) -> None:
     # Bump up the num_samples_per_ray to a high-value for reducing MC noise
     if overridden_num_samples_per_ray is None:
@@ -148,7 +190,7 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback(
         num_samples_per_ray=overridden_num_samples_per_ray_for_beautiful_renders,
     )
     specular_feedback_image = _process_rendered_output_for_feedback_log(
-        specular_rendered_output, training_time
+        specular_rendered_output, training_time, attn_maps
     )
     imageio.imwrite(
         feedback_logs_dir / f"specular_{global_step}_{vol_mod_name}.png",
@@ -170,7 +212,7 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback(
             num_samples_per_ray=overridden_num_samples_per_ray_for_beautiful_renders,
         )
         diffuse_feedback_image = _process_rendered_output_for_feedback_log(
-            diffuse_rendered_output, training_time
+            diffuse_rendered_output, training_time, attn_maps
         )
         imageio.imwrite(
             feedback_logs_dir / f"diffuse_{global_step}_{vol_mod_name}.png",
@@ -179,3 +221,58 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback(
 
         if log_wandb:
             wandb.log({f"diffuse img {vol_mod_name}": wandb.Image(diffuse_feedback_image)}, step=global_step)
+
+def visualize_sh_vox_grid_vol_mod_rendered_feedback_attn(
+        vol_mod: VolumetricModel,
+        vol_mod_name: str,
+        render_feedback_pose: CameraPose,
+        camera_intrinsics: CameraIntrinsics,
+        global_step: int,
+        feedback_logs_dir: Path,
+        parallel_rays_chunk_size: int = 32768,
+        training_time: Optional[float] = None,
+        log_diffuse_rendered_version: bool = True,
+        use_optimized_sampling_mode: bool = False,
+        overridden_num_samples_per_ray: Optional[int] = None,
+        verbose_rendering: bool = True,
+        log_wandb: bool = False,
+) -> None:
+    # Bump up the num_samples_per_ray to a high-value for reducing MC noise
+    if overridden_num_samples_per_ray is None:
+        overridden_num_samples_per_ray_for_beautiful_renders = 512  # :)
+    else:
+        overridden_num_samples_per_ray_for_beautiful_renders = (
+            overridden_num_samples_per_ray
+        )
+
+    # render images
+    log.info(f"rendering intermediate output for feedback, {vol_mod_name} model")
+
+    specular_rendered_output = vol_mod.render(
+        camera_pose=render_feedback_pose,
+        camera_intrinsics=camera_intrinsics,
+        parallel_rays_chunk_size=parallel_rays_chunk_size,
+        gpu_render=True,
+        verbose=verbose_rendering,
+        optimized_sampling=use_optimized_sampling_mode,
+        num_samples_per_ray=overridden_num_samples_per_ray_for_beautiful_renders,
+    )
+    specular_rendered_output_attn = vol_mod.render_attn(
+        camera_pose=render_feedback_pose,
+        camera_intrinsics=camera_intrinsics,
+        parallel_rays_chunk_size=parallel_rays_chunk_size,
+        gpu_render=True,
+        verbose=verbose_rendering,
+        optimized_sampling=use_optimized_sampling_mode,
+        num_samples_per_ray=overridden_num_samples_per_ray_for_beautiful_renders,
+    )
+    specular_feedback_image = _process_rendered_output_for_feedback_log_attn(
+        specular_rendered_output_attn,specular_rendered_output, training_time
+    )
+    imageio.imwrite(
+        feedback_logs_dir / f"specular_{global_step}_{vol_mod_name}.png",
+        specular_feedback_image,
+    )
+
+    if log_wandb:
+        wandb.log({f"specular img {vol_mod_name}": wandb.Image(specular_feedback_image)}, step=global_step)

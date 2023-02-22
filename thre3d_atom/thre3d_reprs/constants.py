@@ -9,3 +9,4 @@ CONFIG_DICT = "config_dict"
 # specific to voxel_grids:
 u_DENSITIES = "_densities"
 u_FEATURES = "_features"
+u_ATTN = 'attn'

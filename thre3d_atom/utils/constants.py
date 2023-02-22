@@ -1,6 +1,7 @@
 NUM_COORD_DIMENSIONS = 3  # for (x, y, z)
 NUM_COLOUR_CHANNELS = 3  # for (r, g, b)
 NUM_RGBA_CHANNELS = 4  # for (r, g, b, a)
+NUM_ATTN_CHANNELS = 1  # for (r, g, b)
 
 
 SEED = 42  # The answer to life, the universe and everything
