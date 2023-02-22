@@ -96,6 +96,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     tv_density_weight: float = 0.0,
     tv_features_weight: float = 0.0,
     do_sds: bool = True,
+    sds_t_freq: int = 200,
+    sds_t_start: int = 1500,
+    sds_t_gamma: float = 1.0,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -149,7 +152,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         regular_density = pretrained_vol_mod.thre3d_repr._densities.detach()
 
     # init sds loss class
-    sds_loss = scoreDistillationLoss(sds_vol_mod.device, sds_prompt, directional=directional_dataset)
+    sds_loss = scoreDistillationLoss(sds_vol_mod.device, 
+                                     sds_prompt, 
+                                     t_sched_start = sds_t_start,
+                                     t_sched_freq = sds_t_freq,
+                                     t_sched_gamma = sds_t_gamma,
+                                     directional=directional_dataset)
     direction_batch = None
     selected_idx_in_batch = [0]
         
@@ -355,8 +363,10 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             if do_sds:
                 total_loss = total_loss + sds_loss.training_step(specular_rendered_pixels_batch_sds,
                                                                  im_h, im_w, 
-                                                                 directions=direction_batch, 
+                                                                 directions=direction_batch,
+                                                                 global_step=global_step, 
                                                                  logvars=logvars_batch)
+                current_sds_max_step = sds_loss.get_current_max_step_ratio()
 
             ### insert losses that tie them together here ###
             density_correlation_loss = _density_correlation_loss(sds_density=sds_density,
@@ -386,6 +396,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 wandb.log({"tv_density_loss" : tv_density_loss.item()}, step=global_step)
             if tv_features_weight > 0:
                 wandb.log({"tv_features_loss" : tv_features_loss.item()}, step=global_step)
+            if do_sds:
+                wandb.log({"current_sds_max_step" : current_sds_max_step}, step=global_step)
             wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
             wandb.log({"total_loss" : total_loss}, step=global_step)
             wandb.log({"first selected indx in batch" : index_batch[0]}, step=global_step)

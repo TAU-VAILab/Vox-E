@@ -164,6 +164,14 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--tv_features_weight", type=click.FLOAT, required=False, default=0.0,
               help="weight for total variation loss on densities", show_default=True)
 
+# sds timestep scheduling:
+@click.option("--sds_t_freq", type=click.INT, required=False, default=200,
+              help="frequency in which to reduce the max timestep in sds", show_default=True)
+@click.option("--sds_t_start", type=click.INT, required=False, default=1500,
+              help="iteration in which to start reducing the max timestep in sds", show_default=True)
+@click.option("--sds_t_gamma", type=click.FLOAT, required=False, default=1.0,
+              help="max timestep reduction gamma", show_default=True)
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -244,6 +252,9 @@ def main(**kwargs) -> None:
         tv_density_weight=config.tv_density_weight,
         tv_features_weight=config.tv_features_weight,
         do_sds=config.do_sds,
+        sds_t_freq=config.sds_t_freq,
+        sds_t_start=config.sds_t_start,
+        sds_t_gamma=config.sds_t_gamma,
     )
 
 

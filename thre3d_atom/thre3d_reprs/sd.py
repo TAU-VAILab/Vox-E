@@ -41,11 +41,19 @@ def seed_everything(seed):
 
 
 class StableDiffusion(nn.Module):
-    def __init__(self, device, sd_version='2.1', hf_key=None):
+    def __init__(self, device, 
+                 sd_version='2.1', 
+                 hf_key=None, 
+                 t_sched_start = 1500,
+                 t_sched_freq = 500,
+                 t_sched_gamma = 1.0,):
         super().__init__()
 
         self.device = device
         self.sd_version = sd_version
+        self.t_sched_start = t_sched_start
+        self.t_sched_freq = t_sched_freq
+        self.t_sched_gamma = t_sched_gamma
 
         print(f'[INFO] loading stable diffusion...')
         
@@ -71,11 +79,18 @@ class StableDiffusion(nn.Module):
         # self.scheduler = PNDMScheduler.from_pretrained(model_key, subfolder="scheduler")
 
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
-        self.min_step = int(self.num_train_timesteps * 0.02)
-        self.max_step = int(self.num_train_timesteps * 0.98)
+        self.min_step_ratio = 0.02
+        self.min_step = int(self.num_train_timesteps * self.min_step_ratio)
+
+        self.max_step_ratio = 0.98
+        self.max_step = int(self.num_train_timesteps * self.max_step_ratio)
+
         self.alphas = self.scheduler.alphas_cumprod.to(self.device) # for convenience
 
         print(f'[INFO] loaded stable diffusion!')
+
+    def get_max_step_ratio(self):
+        return self.max_step_ratio
 
     def get_text_embeds(self, prompt, negative_prompt):
         # prompt, negative_prompt: [str]
@@ -97,9 +112,18 @@ class StableDiffusion(nn.Module):
         return text_embeddings
 
 
-    def train_step(self, text_embeddings, pred_rgb, guidance_scale=100, logvar=None):
-        # interp to 512x512 to be fed into vae.
+    def train_step(self, text_embeddings, pred_rgb, guidance_scale=100, global_step=-1, logvar=None):
+        # schedule max step:
+        if global_step >= self.t_sched_start and global_step % self.t_sched_freq == 0:
+            self.max_step_ratio = self.max_step_ratio * self.t_sched_gamma
+            if self.max_step_ratio < self.min_step_ratio * 2:
+                self.max_step_ratio = self.min_step_ratio * 2 # don't let it get too low!
+            else:
+                print(f"Updating max step to {self.max_step_ratio}")
 
+        self.max_step = int(self.num_train_timesteps * self.max_step_ratio)
+        
+        # interp to 512x512 to be fed into vae.
         # _t = time.time()
         pred_rgb_512 = F.interpolate(pred_rgb, (512, 512), mode='bilinear', align_corners=False)
         # torch.cuda.synchronize(); print(f'[TIME] guiding: interp {time.time() - _t:.4f}s')
@@ -246,14 +270,21 @@ if __name__ == '__main__':
 class scoreDistillationLoss(nn.Module):
     def __init__(self,
                  device,
-                 prompt, 
+                 prompt,
+                 t_sched_start = 1500,
+                 t_sched_freq = 500,
+                 t_sched_gamma = 1.0,
                  directional = False):
         super().__init__()
         self.dir_to_indx_dict = {}
         self.directional = directional
         # get sd model
         #self.sd_model = StableDiffusion(device,"2.0", hf_key="Fictiverse/Stable_Diffusion_VoxelArt_Model")
-        self.sd_model = StableDiffusion(device, "2.0")
+        self.sd_model = StableDiffusion(device, 
+                                        "2.0", 
+                                        t_sched_start=t_sched_start, 
+                                        t_sched_freq=t_sched_freq, 
+                                        t_sched_gamma=t_sched_gamma)
 
         # encode text
         if directional:
@@ -265,7 +296,10 @@ class scoreDistillationLoss(nn.Module):
         else:
             self.text_encoding = self.sd_model.get_text_embeds(prompt, '')
     
-    def training_step(self, output, image_height, image_width, directions=None, logvars=None):
+    def get_current_max_step_ratio(self):
+        return self.sd_model.get_max_step_ratio()
+
+    def training_step(self, output, image_height, image_width, directions=None, global_step=-1, logvars=None):
         loss = 0
         if self.directional:
             assert (directions != None), f"Must supply direction if SDS loss is set to directional mode"
@@ -275,7 +309,7 @@ class scoreDistillationLoss(nn.Module):
 
         # perform training step
         if not self.directional:
-            loss = self.sd_model.train_step(self.text_encoding, out_imgs, logvar=logvars)
+            loss = self.sd_model.train_step(self.text_encoding, out_imgs, global_step=global_step, logvar=logvars)
         else:
             for idx, dir_prompt in enumerate(directions):
                 if logvars != None:
@@ -283,7 +317,7 @@ class scoreDistillationLoss(nn.Module):
                 else:
                     logvar = None
                 encoding = self.text_encodings[dir_prompt]
-                loss = loss + self.sd_model.train_step(encoding, out_imgs, logvar=logvar)
+                loss = loss + self.sd_model.train_step(encoding, out_imgs, global_step=global_step, logvar=logvar)
         
         return loss
 
