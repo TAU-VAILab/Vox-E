@@ -17,7 +17,7 @@
 </br>
 
 ## Getting the Data:
-Download "va_relu_fields_data.zip" from [here](https://drive.google.com/drive/folders/15nsQQzF1ykgefZ4WXuINgdOM90VxtXvL?usp=sharing).
+Download "sds_relu_fields_data.zip" from [here](https://drive.google.com/drive/folders/15nsQQzF1ykgefZ4WXuINgdOM90VxtXvL?usp=sharing).
 Unzip it in the repo folder.
 
 </br>
