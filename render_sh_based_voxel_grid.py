@@ -57,6 +57,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Output saving additions:
 @click.option("--save_freq", type=click.INT, default=None,
               required=False, help="frames per second of the video")
+@click.option("-p", "--sds_prompt", type=click.STRING, required=False, default=None,
+              help="sds prompt used for SDS based loss, if not None, prints it out to a file")
 
 # fmt: on
 # -------------------------------------------------------------------------------------
@@ -70,6 +72,12 @@ def main(**kwargs) -> None:
 
     # create the output path if it doesn't exist
     output_path.mkdir(exist_ok=True, parents=True)
+
+    # save prompt to text file if not None
+    if config.sds_prompt != None:
+        text_path = output_path / "prompt.txt"
+        with open(text_path, 'w') as file:
+            file.write(config.sds_prompt)
 
     # load volumetric_model from the model_path
     vol_mod, extra_info = create_volumetric_model_from_saved_model(

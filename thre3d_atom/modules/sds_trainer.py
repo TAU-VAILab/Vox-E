@@ -92,6 +92,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     use_uncertainty: bool = False,
     new_frame_frequency: int = 1,
     density_correlation_weight: float = 0.0,
+    feature_correlation_weight: float = 0.0,
     unet3d_mode: bool = False,
     tv_density_weight: float = 0.0,
     tv_features_weight: float = 0.0,
@@ -146,10 +147,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
     # get regular density for dcl
     if unet3d_mode:
-        regular_density, _ = pretrained_vol_mod.thre3d_repr.get_densities_and_features()
+        regular_density, regular_features = pretrained_vol_mod.thre3d_repr.get_densities_and_features()
         regular_density = regular_density.detach()
+        regular_features = regular_features.detach()
     else:
         regular_density = pretrained_vol_mod.thre3d_repr._densities.detach()
+        regular_features = pretrained_vol_mod.thre3d_repr._features.detach()
 
     # init sds loss class
     sds_loss = scoreDistillationLoss(sds_vol_mod.device, 
@@ -312,9 +315,10 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
 
             if unet3d_mode:
-                sds_density, _ = sds_vol_mod.thre3d_repr.get_densities_and_features()
+                sds_density, sds_features = sds_vol_mod.thre3d_repr.get_densities_and_features()
             else:
                 sds_density = sds_vol_mod.thre3d_repr._densities
+                sds_features = sds_vol_mod.thre3d_repr._features
 
             if global_step % new_frame_frequency == 0 or global_step == 1:
                 images, poses, indices = next(infinite_train_dl)
@@ -369,9 +373,15 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 current_sds_max_step = sds_loss.get_current_max_step_ratio()
 
             ### insert losses that tie them together here ###
-            density_correlation_loss = _density_correlation_loss(sds_density=sds_density,
+            density_correlation_loss, cov_grid = _density_correlation_loss(sds_density=sds_density,
                                                                  regular_density=regular_density)
             total_loss = total_loss + density_correlation_loss * density_correlation_weight
+
+            if feature_correlation_weight > 0.0:
+                feature_correlation_loss = _feature_correlation_loss(sds_features=sds_features,
+                                                                 regular_features=regular_features,
+                                                                 density_cov_grid=cov_grid)
+                total_loss = total_loss + feature_correlation_loss * feature_correlation_weight
 
             ### insert other losses here ###
             if tv_density_weight > 0 and global_step % 1 == 0:
@@ -398,6 +408,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 wandb.log({"tv_features_loss" : tv_features_loss.item()}, step=global_step)
             if do_sds:
                 wandb.log({"current_sds_max_step" : current_sds_max_step}, step=global_step)
+            if feature_correlation_weight > 0:
+                wandb.log({"feature_correlation_loss" : feature_correlation_loss.item()}, step=global_step)
             wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
             wandb.log({"total_loss" : total_loss}, step=global_step)
             wandb.log({"first selected indx in batch" : index_batch[0]}, step=global_step)
@@ -581,13 +593,55 @@ def _density_correlation_loss(sds_density: Tensor,
     denominator = torch.sqrt(sds_var * regular_var)
 
     # Calculate Covariance:
-    covariance = (sds_density - torch.mean(sds_density)) * \
+    covariance_grid = (sds_density - torch.mean(sds_density)) * \
         (regular_density - torch.mean(regular_density))
-    covariance = torch.mean(covariance)
+    #covariance = torch.mean(covariance_grid)
 
     # Return Result:
-    correlation = covariance / (denominator + eps)
-    return 1.0 - correlation
+    correlation_grid = covariance_grid / (denominator + eps)
+    correlation = torch.mean(correlation_grid)
+    return 1.0 - correlation, correlation_grid.detach()
+
+def _feature_correlation_loss(sds_features: Tensor,
+                              regular_features: Tensor,
+                              density_cov_grid):
+    eps = 0.0000001 # for numerical stability
+    regular_features = regular_features.detach()
+    norm_density_cov_grid = (density_cov_grid - density_cov_grid.min()  + eps) \
+        / (density_cov_grid.max() + eps)
+    weights = torch.nn.functional.softmax(torch.flatten(norm_density_cov_grid))
+    weights = torch.reshape(weights, density_cov_grid.shape)
+
+    sds_features_colors = torch.sigmoid(sds_features)
+    regular_features_colors = torch.sigmoid(regular_features)
+    l2_diffs = torch.sum(sds_features_colors - regular_features_colors, dim=-1) ** 2
+    loss = torch.sum(weights * l2_diffs)
+    loss = torch.sum(l2_diffs)
+    return loss
+
+
+    ## normalize cov grid:
+    #eps = 0.0000001 # for numerical stability
+
+    #norm_density_cov_grid = (density_cov_grid - density_cov_grid.min()  + eps) \
+    #    / (density_cov_grid.max() + eps)
+
+    ## Calculate Denominator:
+    #sds_var = torch.mean((sds_features - torch.mean(sds_features, dim=0))**2)
+    #regular_var = torch.mean((regular_features - torch.mean(regular_features, dim=0))**2)
+    #denominator = torch.sqrt(sds_var * regular_var)
+
+    ## Calculate Covariance:
+    #covariance_grid = (sds_features - torch.mean(sds_features, dim=0)) * \
+    #    (regular_features - torch.mean(regular_features, dim=0))
+    #
+    ## multiply the cov grid by the densities cov grid to enforce correlation in meaningful places
+    #covariance_grid = covariance_grid * norm_density_cov_grid
+    #covariance = torch.mean(covariance_grid)
+
+    ## Return Result:
+    #correlation = covariance / (denominator + eps)
+    #return 1.0 - correlation
 
 def _get_dir_batch_from_poses(poses: Tensor):
     dir_batch = []

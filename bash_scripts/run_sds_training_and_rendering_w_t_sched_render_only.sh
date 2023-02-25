@@ -40,7 +40,7 @@ train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_deca
 scene=dog2
 prompt="a render of a dog costumed as a christmas elf"
 directional=True
-log_name="christmas" # 1-word description of the prompt for saving
+log_name="balloon" # 1-word description of the prompt for saving
 dcl_weight=200.0
 sds_t_decay_start=4000
 sds_t_gamma=0.75

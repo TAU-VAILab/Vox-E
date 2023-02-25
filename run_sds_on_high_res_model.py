@@ -159,6 +159,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of iterations where we work on the same pose", show_default=True)
 @click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=0.0,
               help="weight for density correlation loss", show_default=True)
+@click.option("--feature_correlation_weight", type=click.FLOAT, required=False, default=0.0,
+              help="weight for feature correlation loss", show_default=True)
 @click.option("--tv_density_weight", type=click.FLOAT, required=False, default=0.0,
               help="weight for total variation loss on densities", show_default=True)
 @click.option("--tv_features_weight", type=click.FLOAT, required=False, default=0.0,
@@ -249,6 +251,7 @@ def main(**kwargs) -> None:
         use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
         density_correlation_weight=config.density_correlation_weight,
+        feature_correlation_weight=config.feature_correlation_weight,
         tv_density_weight=config.tv_density_weight,
         tv_features_weight=config.tv_features_weight,
         do_sds=config.do_sds,

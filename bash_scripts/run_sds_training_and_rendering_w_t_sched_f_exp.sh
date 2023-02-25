@@ -20,11 +20,12 @@ train_and_render() {
 	echo "Starting Training..."
 	python run_sds_on_high_res_model.py \
 	-d ../data/${1}/ \
-	-o logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}/ \
+	-o logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}_fcl_${9}/ \
 	-i logs/rf/${1}_ref_shdeg_0/saved_models/model_final.pth \
 	-p "$2" \
 	--directional_dataset=${3} \
 	--density_correlation_weight=${5} \
+	--feature_correlation_weight=${9} \
 	--sds_t_start=${6} \
 	--sds_t_gamma=${7} \
 	--sds_t_freq=${8} \
@@ -33,30 +34,20 @@ train_and_render() {
 	# Rendering Output Video:
 	echo "Starting Rendering..."
 	python render_sh_based_voxel_grid.py \
-	-i logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}/saved_models/model_final.pth \
-	-o output_renders/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8} \
+	-i logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}_fcl_${9}/saved_models/model_final.pth \
+	-o output_renders/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}_fcl_${9} \
 	--save_freq=10
 }
 
 # STARTING RUN:
-scene=duck
-prompt="a render of a duck wearing big sunglasses"
+scene=dog2
+prompt="a render of a dog wearing big sunglasses"
 directional=True
 log_name="bigglasses" # 1-word description of the prompt for saving
 dcl_weight=200.0
 sds_t_decay_start=4000
 sds_t_gamma=0.75
 sds_t_freq=500
+fcl_weight=50001.0
 
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
-
-scene=taxi
-prompt="a render of a yarn doll of a car"
-directional=True
-log_name="yarn" # 1-word description of the prompt for saving
-dcl_weight=200.0
-sds_t_decay_start=4000
-sds_t_gamma=0.75
-sds_t_freq=500
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
+train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq $fcl_weight
