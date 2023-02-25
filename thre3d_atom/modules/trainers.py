@@ -285,30 +285,32 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             # sample a batch rays and pixels for a single iteration
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
-            #images, poses, _ = next(infinite_train_dl)
-
-            images, poses, indices = next(infinite_train_dl)
+            images, poses, _ = next(infinite_train_dl)
 
             # cast rays for all the loaded images:
             rays_list = []
-            unflattened_rays_list = []
             for pose in poses:
-                unflattened_rays = cast_rays(
+                casted_rays = flatten_rays(
+                    cast_rays(
                         current_stage_train_dataset.camera_intrinsics,
                         CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
                         device=vol_mod.device,
                     )
-                casted_rays = flatten_rays(unflattened_rays)
-                rays_list.append(casted_rays)
-                unflattened_rays_list.append(unflattened_rays)
-            unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
-            # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
-            _, _, im_h, im_w = images.shape
-            # sample a subset of rays and pixels synchronously
-            batch_size_in_images = int(ray_batch_size / (im_h * im_w))
-            rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
-                    unflattened_rays, images, indices, batch_size_in_images
                 )
+                rays_list.append(casted_rays)
+            rays = collate_rays(rays_list)
+
+            # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
+            pixels = (
+                images.permute(0, 2, 3, 1)
+                .reshape(-1, images.shape[1])
+                .to(vol_mod.device)
+            )
+
+            # sample a subset of rays and pixels synchronously
+            rays_batch, pixels_batch = sample_random_rays_and_pixels_synchronously(
+                rays, pixels, ray_batch_size
+            )
 
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch = vol_mod.render_rays(rays_batch)
@@ -317,19 +319,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             # compute loss and perform gradient update
             # Main, specular loss
             total_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch)
-
-            # LPIPS loss:
-            if stage == num_stages and lpips_weight > 0.0:
-                out_imgs = torch.reshape(specular_rendered_pixels_batch, (-1, im_h, im_w, 3))
-                out_imgs = out_imgs.permute((0, 3, 1, 2))
-                target_pixels = torch.reshape(pixels_batch, (-1, im_h, im_w, 3))
-                target_pixels = target_pixels.permute((0, 3, 1, 2))
-                lpips_loss = vgg_lpips_computer(
-                    out_imgs,
-                    target_pixels,
-                    normalize=True,
-                )
-                total_loss = total_loss + lpips_loss * lpips_weight
 
             # logging info:
             specular_loss_value = total_loss
