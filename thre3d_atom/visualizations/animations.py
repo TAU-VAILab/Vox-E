@@ -1,4 +1,5 @@
 from typing import Sequence, Optional
+import imageio
 
 import numpy as np
 
@@ -20,6 +21,8 @@ def render_camera_path_for_volumetric_model(
     camera_intrinsics: CameraIntrinsics,
     render_scale_factor: Optional[float] = None,
     overridden_num_samples_per_ray: Optional[int] = None,
+    image_save_freq: Optional[int] = None,
+    image_save_path: Optional[str] = None,
 ) -> np.array:
     if render_scale_factor is not None:
         # Render downsampled images for speed if requested
@@ -58,5 +61,13 @@ def render_camera_path_for_volumetric_model(
         # create grand concatenated frame horizontally
         frame = np.concatenate([colour_frame, depth_frame, acc_frame], axis=1)
         rendered_frames.append(frame)
+
+        # save image if necessary (used for plots and stuff)
+        if image_save_freq != None:
+            if frame_num % image_save_freq == 0:
+                imageio.imwrite(
+                image_save_path / f"{frame_num}.png",
+                colour_frame,
+        )
 
     return np.stack(rendered_frames)

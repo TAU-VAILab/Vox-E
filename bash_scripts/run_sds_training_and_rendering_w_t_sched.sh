@@ -34,29 +34,73 @@ train_and_render() {
 	echo "Starting Rendering..."
 	python render_sh_based_voxel_grid.py \
 	-i logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}/saved_models/model_final.pth \
-	-o output_renders/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}
+	-o output_renders/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8} \
+	--save_freq=10
 }
 
 # STARTING RUN:
-
-scene=dog2
-prompt="a cute light grey dog wearing big sunglasses"
+scene=duck
+prompt="a render of a duck wearing big sunglasses"
 directional=True
 log_name="bigglasses" # 1-word description of the prompt for saving
-dcl_weight=3000.0
-sds_t_decay_start=1500
-sds_t_gamma=0.8
-sds_t_freq=400
+dcl_weight=200.0
+sds_t_decay_start=4000
+sds_t_gamma=0.75
+sds_t_freq=500
 
 train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
 
-scene=dog2
-prompt="a cute light grey dog wearing big sunglasses"
+scene=taxi
+prompt="a render of a yarn doll of a car"
 directional=True
-log_name="bigglasses" # 1-word description of the prompt for saving
-dcl_weight=3000.0
-sds_t_decay_start=1500
-sds_t_gamma=1.0
-sds_t_freq=400
+log_name="yarn" # 1-word description of the prompt for saving
+dcl_weight=200.0
+sds_t_decay_start=4000
+sds_t_gamma=0.75
+sds_t_freq=500
+
+train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
+
+scene=penguin
+prompt="a render of a penguin wearing a christmas sweater"
+directional=True
+log_name="christmas" # 1-word description of the prompt for saving
+dcl_weight=200.0
+sds_t_decay_start=4000
+sds_t_gamma=0.75
+sds_t_freq=500
+
+train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
+
+scene=penguin
+prompt="a render of a penguin wearing a chritmas sweater"
+directional=True
+log_name="christmas" # 1-word description of the prompt for saving
+dcl_weight=200.0
+sds_t_decay_start=4000
+sds_t_gamma=0.75
+sds_t_freq=500
+
+train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
+
+scene=penguin
+prompt="a render of a wood carving of a penguin"
+directional=True
+log_name="wood" # 1-word description of the prompt for saving
+dcl_weight=200.0
+sds_t_decay_start=4000
+sds_t_gamma=0.75
+sds_t_freq=500
+
+train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
+
+scene=penguin
+prompt="a render of a yarn doll of a penguin"
+directional=True
+log_name="yarn" # 1-word description of the prompt for saving
+dcl_weight=200.0
+sds_t_decay_start=4000
+sds_t_gamma=0.75
+sds_t_freq=500
 
 train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq

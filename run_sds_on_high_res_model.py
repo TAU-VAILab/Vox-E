@@ -102,7 +102,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=5000,
+@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=8000,
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
@@ -112,7 +112,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="frequency in which to reduce learning rate", show_default=True)
 @click.option("--lr_decay_start", type=click.INT, required=False, default=5000,
               help="step in which to start decreasing learning rate", show_default=True)
-@click.option("--lr_gamma", type=click.FLOAT, required=False, default=0.8,
+@click.option("--lr_gamma", type=click.FLOAT, required=False, default=0.96,
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
 @click.option("--apply_diffuse_render_regularization", type=click.BOOL, required=False, default=True,
               help="whether to apply the diffuse render regularization."

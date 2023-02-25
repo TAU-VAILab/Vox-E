@@ -54,6 +54,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--fps", type=click.IntRange(min=1), default=60,
               required=False, help="frames per second of the video")
 
+# Output saving additions:
+@click.option("--save_freq", type=click.INT, default=None,
+              required=False, help="frames per second of the video")
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -73,6 +77,9 @@ def main(**kwargs) -> None:
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
         device=device,
     )
+    vol_mod.render_config.random_bkgd = False
+    vol_mod.render_config.white_bkgd = True
+
     hemispherical_radius = extra_info[HEMISPHERICAL_RADIUS]
     camera_intrinsics = extra_info[CAMERA_INTRINSICS]
 
@@ -107,6 +114,8 @@ def main(**kwargs) -> None:
         camera_intrinsics=camera_intrinsics,
         overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
         render_scale_factor=config.render_scale_factor,
+        image_save_freq=config.save_freq,
+        image_save_path=output_path,
     )
 
     imageio.mimwrite(
