@@ -246,7 +246,7 @@ def main(**kwargs) -> None:
         fast_debug_mode=config.fast_debug_mode,
         diffuse_weight=config.diffuse_weight,
         specular_weight=config.specular_weight,
-        sds_prompt=config.sds_prompt,
+        sds_prompt=config.prompt,
         directional_dataset=config.directional_dataset,
         use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
