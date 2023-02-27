@@ -51,7 +51,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=True, help="path to the pre-trained high-res model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for training output")
-@click.option("-p", "--sds_prompt", type=click.STRING, required=True,
+@click.option("-p", "--prompt", type=click.STRING, required=True,
               help="sds prompt used for SDS based loss")
 
 # Input dataset related arguments:
@@ -59,11 +59,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               default=True, help="whether the data directory has separate train and test folders", 
               show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
-              default=4.0, help="downscale factor for the input images if needed."
+              default=3.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
 
 # Voxel-grid related arguments:
-@click.option("--grid_dims", type=click.INT, nargs=3, required=False, default=(128, 128, 128),
+@click.option("--grid_dims", type=click.INT, nargs=3, required=False, default=(160, 160, 160),
               help="dimensions (#voxels) of the grid along x, y and z axes", show_default=True)
 @click.option("--grid_location", type=click.FLOAT, nargs=3, required=False, default=(0.0, 0.0, 0.0),
               help="dimensions (#voxels) of the grid along x, y and z axes", show_default=True)
@@ -96,7 +96,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)  # this option is also used in pre-processing the dataset
 
 # Training related arguments:
-@click.option("--ray_batch_size", type=click.INT, required=False, default=65536,
+@click.option("--ray_batch_size", type=click.INT, required=False, default=65536 * 1.25,
               help="number of randomly sampled rays used per training iteration", show_default=True)
 @click.option("--train_num_samples_per_ray", type=click.INT, required=False, default=256,
               help="number of samples taken per ray during training", show_default=True)
@@ -146,7 +146,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="diffuse weight used for regularization", show_default=True)
 @click.option("--specular_weight", type=click.FLOAT, required=False, default=0.0000001,
               help="specular weight used for regularization", show_default=True)
-@click.option("--directional_dataset", type=click.BOOL, required=False, default=False,
+@click.option("--directional_dataset", type=click.BOOL, required=False, default=True,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
                show_default=True)
 @click.option("--use_uncertainty", type=click.BOOL, required=False, default=False,
@@ -157,7 +157,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                show_default=True)
 @click.option("--new_frame_frequency", type=click.INT, required=False, default=1,
               help="number of iterations where we work on the same pose", show_default=True)
-@click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=0.0,
+@click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=200.0,
               help="weight for density correlation loss", show_default=True)
 @click.option("--feature_correlation_weight", type=click.FLOAT, required=False, default=0.0,
               help="weight for feature correlation loss", show_default=True)
@@ -167,11 +167,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="weight for total variation loss on densities", show_default=True)
 
 # sds timestep scheduling:
-@click.option("--sds_t_freq", type=click.INT, required=False, default=200,
+@click.option("--sds_t_freq", type=click.INT, required=False, default=600,
               help="frequency in which to reduce the max timestep in sds", show_default=True)
-@click.option("--sds_t_start", type=click.INT, required=False, default=1500,
+@click.option("--sds_t_start", type=click.INT, required=False, default=4000,
               help="iteration in which to start reducing the max timestep in sds", show_default=True)
-@click.option("--sds_t_gamma", type=click.FLOAT, required=False, default=1.0,
+@click.option("--sds_t_gamma", type=click.FLOAT, required=False, default=0.75,
               help="max timestep reduction gamma", show_default=True)
 
 # fmt: on

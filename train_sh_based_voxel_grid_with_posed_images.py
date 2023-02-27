@@ -48,11 +48,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               default=True, help="whether the data directory has separate train and test folders", 
               show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
-              default=2.0, help="downscale factor for the input images if needed."
+              default=1.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
 
 # Voxel-grid related arguments:
-@click.option("--grid_dims", type=click.INT, nargs=3, required=False, default=(128, 128, 128),
+@click.option("--grid_dims", type=click.INT, nargs=3, required=False, default=(160, 160, 160),
               help="dimensions (#voxels) of the grid along x, y and z axes", show_default=True)
 @click.option("--grid_location", type=click.FLOAT, nargs=3, required=False, default=(0.0, 0.0, 0.0),
               help="dimensions (#voxels) of the grid along x, y and z axes", show_default=True)
