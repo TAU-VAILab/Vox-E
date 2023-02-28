@@ -332,8 +332,8 @@ def train_attn_grid(
                     wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}  , step=global_step)
                 out_imgs = rendered_output.colour.unsqueeze(0)
                 out_imgs = out_imgs.permute((0, 3, 1, 2)).to(vol_mod.device)
-                m_prompt = prompt + f", {direction_batch} view"
-                gt, t = sd_model.get_attn_map(prompt=[m_prompt], pred_rgb=out_imgs, timestamp=timestamp,
+                m_prompt = prompt + f", {direction_batch[0]} view"
+                gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
                                               indices_to_alter=indices_to_attn)
                 cmp = cm.get_cmap('jet')
                 norm = colors.Normalize(vmin=0, vmax=torch.max(gt).item())

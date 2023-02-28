@@ -112,13 +112,9 @@ class VoxelGrid(Module):
         if tunable:
             self._densities = torch.nn.Parameter(self._densities)
             self._features = torch.nn.Parameter(self._features)
-<<<<<<< HEAD
+
             if attn is not None:
                 self.attn = torch.nn.Parameter(self.attn)
-
-=======
-            
->>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
 
         # either densities or features can be used:
         self._device = features.device
