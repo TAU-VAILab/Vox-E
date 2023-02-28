@@ -39,21 +39,10 @@ train_and_render() {
 }
 
 # STARTING RUN:
-scene=duck
-prompt="a render of a duck wearing big sunglasses"
+scene=kangaroo
+prompt="a render of a kangaroo wearing big sunglasses"
 directional=True
 log_name="bigglasses" # 1-word description of the prompt for saving
-dcl_weight=200.0
-sds_t_decay_start=4000
-sds_t_gamma=0.75
-sds_t_freq=500
-
-train_and_render $scene "$prompt" $directional $log_name $dcl_weight $sds_t_decay_start $sds_t_gamma $sds_t_freq
-
-scene=taxi
-prompt="a render of a yarn doll of a car"
-directional=True
-log_name="yarn" # 1-word description of the prompt for saving
 dcl_weight=200.0
 sds_t_decay_start=4000
 sds_t_gamma=0.75
