@@ -5,6 +5,7 @@ from functools import partial
 from pathlib import Path
 from typing import Callable, Optional
 from PIL import Image
+import torchvision.transforms as T
 
 import imageio
 import torch
@@ -299,33 +300,6 @@ def train_dcl(
                     unflattened_rays, images, indices, batch_size_in_images
                 )
 
-                # pose = poses[selected_idx_in_batch]
-                # pose = CameraPose(
-                #     rotation=pose[-1][:, :3].cpu().numpy(),
-                #     translation=pose[-1][:, 3:].cpu().numpy(),
-                # )
-                # rendered_output_sds = sds_attn_vol_mod.render(
-                #     pose,
-                #     camera_intrinsics,
-                #     gpu_render=False,
-                #     verbose=False,
-                # )
-                #
-                # rendered_output_pre = pretrained_vol_mod.render(
-                #     pose,
-                #     camera_intrinsics,
-                #     gpu_render=False,
-                #     verbose=False,
-                # )
-                #
-                # rendered_attn = sds_attn_vol_mod.render_attn(
-                #     pose,
-                #     camera_intrinsics,
-                #     gpu_render=False,
-                #     verbose=False,
-                # )
-
-                # log inputs
 
             specular_rendered_batch_sds = sds_attn_vol_mod.render_rays(rays_batch)
             specular_rendered_pixels_batch_sds = specular_rendered_batch_sds.colour
@@ -350,7 +324,8 @@ def train_dcl(
                 as_tuple=True)
             mask = torch.ones_like(sds_im)
             mask[filtered_idxs] = 0
-            mask = ndimage.binary_erosion(a).astype(a.dtype)
+            trans = T.GaussianBlur(kernel_size=(3, 3))
+            mask = trans(mask.unsqueeze(0).permute(0,3,1,2)).squeeze(0).permute(1,2,0)
 
             wandb.log({"Mask": wandb.Image(mask.cpu().numpy())},step=global_step)
             diff = torch.abs(sds_im - pretrained_im)
