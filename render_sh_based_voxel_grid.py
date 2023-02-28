@@ -31,6 +31,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=True, help="path to the trained (reconstructed) model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for saving rendered output")
+@click.option("-r", "--ref_path", type=click.Path(file_okay=True, dir_okay=False), default=None,
+              required=False, help="path for saving rendered output")
 
 # Non-required Render configuration options:
 @click.option("--overridden_num_samples_per_ray", type=click.IntRange(min=1), default=512,
@@ -87,6 +89,16 @@ def main(**kwargs) -> None:
     )
     vol_mod.render_config.random_bkgd = False
     vol_mod.render_config.white_bkgd = True
+
+    # override extra info with ref's if given - raises quality
+    if config.ref_path != None:
+        ref_path = Path(config.ref_path)
+        _, extra_info_ref = create_volumetric_model_from_saved_model(
+            model_path=ref_path,
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
+            device=device,
+        )
+        extra_info = extra_info_ref
 
     hemispherical_radius = extra_info[HEMISPHERICAL_RADIUS]
     camera_intrinsics = extra_info[CAMERA_INTRINSICS]
