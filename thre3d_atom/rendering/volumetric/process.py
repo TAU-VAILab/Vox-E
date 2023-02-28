@@ -100,7 +100,7 @@ def process_points_with_sh_voxel_grid_attn(
     rays: Rays,
     voxel_grid: VoxelGrid,
     render_diffuse: bool = False,
-    parallel_points_chunk_size: Optional[int] = None,
+    parallel_points_chunk_size: Optional[int] = None, orig_densities=False
 ) -> ProcessedPointsOnRays:
     dtype, device = sampled_points.points.dtype, sampled_points.points.device
 
@@ -112,7 +112,7 @@ def process_points_with_sh_voxel_grid_attn(
 
     # account for point/sample-based parallelization if requested
     if parallel_points_chunk_size is None:
-        interpolated_features = voxel_grid.forward_attn(flat_sampled_points)
+        interpolated_features = voxel_grid.forward_attn(flat_sampled_points, orig_densities=orig_densities)
     else:
         interpolated_features = batchify(
             voxel_grid.forward_attn,

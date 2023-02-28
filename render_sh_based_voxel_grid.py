@@ -3,7 +3,7 @@ import click
 import imageio
 import torch
 
-from thre3d_atom.thre3d_reprs.sd import StableDiffusion
+from thre3d_atom.thre3d_reprs.sd_attn import StableDiffusion
 from thre3d_atom.modules.volumetric_model import (
     create_volumetric_model_from_saved_model, create_volumetric_model_from_saved_model_attn
 )
@@ -86,7 +86,7 @@ def main(**kwargs) -> None:
         vol_mod, extra_info = create_volumetric_model_from_saved_model_attn(
             model_path=model_path,
             thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
-            device=device, add_attn=config.load_attention
+            device=device, load_attn=config.load_attention
         )
     # load volumetric_model from the model_path
     else:

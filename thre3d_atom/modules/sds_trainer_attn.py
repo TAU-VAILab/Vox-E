@@ -31,7 +31,7 @@ from thre3d_atom.thre3d_reprs.voxels import (
     VoxelGrid,
     scale_voxel_grid_with_required_output_size,
 )
-from thre3d_atom.thre3d_reprs.sd import scoreDistillationLoss
+from thre3d_atom.thre3d_reprs.sd_attn import scoreDistillationLoss
 from thre3d_atom.utils.constants import (
     CAMERA_BOUNDS,
     CAMERA_INTRINSICS,
@@ -317,8 +317,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             # please check the `data.datasets` module
             total_loss = 0
             global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
-            if global_step % 1000 == 0:
-                a = 1
             if weight_schedule and global_step % 1000 == 0:
                 density_correlation_weight *= 10
             if global_step % new_frame_frequency == 0 or global_step == 1:
@@ -352,33 +350,13 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
                 if directional_dataset:
                     direction_batch = get_dir_batch_from_poses(poses[selected_idx_in_batch])
-                    # while direction_batch[0] != 'front' and direction_batch[0] != 'overhead':
-                    #    images, poses, indices = next(infinite_train_dl)
-                    #    rays_list = []
-                    #    unflattened_rays_list = []
-                    #    for pose in poses:
-                    #        unflattened_rays = cast_rays(
-                    #                current_stage_train_dataset.camera_intrinsics,
-                    #                CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
-                    #                device=sds_vol_mod.device,
-                    #            )
-                    #        casted_rays = flatten_rays(unflattened_rays)
-                    #        rays_list.append(casted_rays)
-                    #        unflattened_rays_list.append(unflattened_rays)
-
-                    #    unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
-                    #    rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
-                    #            unflattened_rays, images, indices, batch_size_in_images
-                    #    )
-                    #    direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
                     wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
 
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch_sds = sds_vol_mod.render_rays(rays_batch)
             specular_rendered_pixels_batch_sds = specular_rendered_batch_sds.colour
-            if not lbo:
-                specular_rendered_batch_pretrained = pretrained_vol_mod.render_rays(rays_batch)
-                specular_rendered_pixels_batch_pretrained = specular_rendered_batch_pretrained.colour
+            specular_rendered_batch_pretrained = pretrained_vol_mod.render_rays(rays_batch)
+            specular_rendered_pixels_batch_pretrained = specular_rendered_batch_pretrained.colour
 
             # run sds loss training step!
             if use_uncertainty:

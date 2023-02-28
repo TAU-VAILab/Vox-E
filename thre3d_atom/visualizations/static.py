@@ -236,6 +236,7 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback_attn(
         overridden_num_samples_per_ray: Optional[int] = None,
         verbose_rendering: bool = True,
         log_wandb: bool = False,
+        orig_densities: bool = False
 ) -> None:
     # Bump up the num_samples_per_ray to a high-value for reducing MC noise
     if overridden_num_samples_per_ray is None:
@@ -265,6 +266,7 @@ def visualize_sh_vox_grid_vol_mod_rendered_feedback_attn(
         verbose=verbose_rendering,
         optimized_sampling=use_optimized_sampling_mode,
         num_samples_per_ray=overridden_num_samples_per_ray_for_beautiful_renders,
+        orig_densities=orig_densities
     )
     specular_feedback_image = _process_rendered_output_for_feedback_log_attn(
         specular_rendered_output_attn,specular_rendered_output, training_time

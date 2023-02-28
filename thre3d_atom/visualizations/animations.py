@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib import colors, cm
 from thre3d_atom.thre3d_reprs.cross_attn import text_under_image
-from thre3d_atom.modules.sds_trainer import get_dir_batch_from_poses
+from thre3d_atom.modules.sds_trainer_attn import get_dir_batch_from_poses
 from thre3d_atom.modules.volumetric_model import VolumetricModel
 from thre3d_atom.utils.constants import EXTRA_ACCUMULATED_WEIGHTS, NUM_COLOUR_CHANNELS
 from thre3d_atom.utils.imaging_utils import (

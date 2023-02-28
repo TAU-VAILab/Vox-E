@@ -107,6 +107,7 @@ class VoxelGrid(Module):
         self._expected_density_scale = expected_density_scale
         self._tunable = tunable
         self.attn = attn
+        self.orig_densities = densities
 
         if tunable:
             self._densities = torch.nn.Parameter(self._densities)
@@ -130,6 +131,8 @@ class VoxelGrid(Module):
 
     def add_attn_params(self, attn):
         self.attn = torch.nn.Parameter(attn)
+    def update_orig_densities(self):
+        self.orig_densities = self._densities.clone().detach()
 
     @property
     def densities(self) -> Tensor:
@@ -338,7 +341,7 @@ class VoxelGrid(Module):
         # return a unified tensor containing interpolated features and densities
         return torch.cat([interpolated_features, interpolated_densities], dim=-1)
 
-    def forward_attn(self, points: Tensor, viewdirs: Optional[Tensor] = None) -> Tensor:
+    def forward_attn(self, points: Tensor, viewdirs: Optional[Tensor] = None,orig_densities=False) -> Tensor:
         """
         computes the features/radiance at the requested 3D points
         Args:
@@ -354,9 +357,14 @@ class VoxelGrid(Module):
 
         # interpolate and compute densities
         # Note the pre- and post-activations :)
-        preactivated_densities = self._density_preactivation(
-            self._densities * self._expected_density_scale
-        )  # note the use of the expected density scale
+        if orig_densities:
+            preactivated_densities = self._density_preactivation(
+            self.orig_densities * self._expected_density_scale
+        )
+        else:
+            preactivated_densities = self._density_preactivation(
+                self._densities * self._expected_density_scale
+            )  # note the use of the expected density scale
         interpolated_densities = (
             grid_sample(
                 # note the weird z, y, x convention of PyTorch's grid_sample.
@@ -493,7 +501,8 @@ def create_voxel_grid_from_saved_info_dict(saved_info: Dict[str, Any]) -> VoxelG
 def create_voxel_grid_from_saved_info_dict_attn(saved_info: Dict[str, Any], load_attn=False) -> VoxelGrid:
     densities = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_DENSITIES])
     features = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_FEATURES])
-    attn = torch.zeros_like(densities) - 0.5
+    # attn = torch.zeros_like(densities) - 0.5
+    attn = torch.ones_like(densities)
     if load_attn:
         attn = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_ATTN])
         voxel_grid = VoxelGrid(

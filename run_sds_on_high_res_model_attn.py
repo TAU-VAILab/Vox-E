@@ -9,7 +9,7 @@ from easydict import EasyDict
 from torch.backends import cudnn
 
 from thre3d_atom.data.datasets import PosedImagesDataset
-from thre3d_atom.modules.sds_trainer import train_sh_vox_grid_vol_mod_with_posed_images_and_sds
+from thre3d_atom.modules.sds_trainer_attn import train_sh_vox_grid_vol_mod_with_posed_images_and_sds
 from thre3d_atom.modules.volumetric_model import (
     VolumetricModel,
     create_volumetric_model_from_saved_model,
@@ -164,7 +164,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="avg color and density", show_default=True)
 @click.option("--two_way", type=click.BOOL, required=False, default=False,
               help="two way optimization", show_default=True)
-@click.option("--lbo", type=click.BOOL, required=False, default=False,
+@click.option("--lbo", type=click.BOOL, required=False, default=True,
               help="lower_branch", show_default=True)
 @click.option("--weight_schedule", type=click.BOOL, required=False, default=False,
               help="lower_branch", show_default=True)

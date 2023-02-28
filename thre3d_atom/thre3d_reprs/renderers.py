@@ -107,7 +107,7 @@ def render_sh_voxel_grid_attn(
     voxel_grid: VoxelGrid,
     rays: Rays,
     render_config: SHVoxGridRenderConfig,
-    parallel_points_chunk_size: Optional[int] = None,
+    parallel_points_chunk_size: Optional[int] = None, orig_densities=False
 ) -> RenderOutAttn:
     """
     renders an SH-based voxel grid
@@ -136,6 +136,7 @@ def render_sh_voxel_grid_attn(
         voxel_grid=voxel_grid,
         render_diffuse=render_config.render_diffuse,
         parallel_points_chunk_size=parallel_points_chunk_size,
+        orig_densities=orig_densities
     )
     # finally, prepare the accumulator_function
     accumulator_function = partial(

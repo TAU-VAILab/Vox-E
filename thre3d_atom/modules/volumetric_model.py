@@ -116,7 +116,7 @@ class VolumetricModel:
         )
 
     def render_rays_attn(
-            self, rays: Rays, parallel_points_chunk_size: Optional[int] = None, **kwargs
+            self, rays: Rays, parallel_points_chunk_size: Optional[int] = None, orig_densities=False, **kwargs
     ) -> RenderOutAttn:
         """
         renders the rays for the underlying thre3d_repr using the render
@@ -129,7 +129,7 @@ class VolumetricModel:
         """
         render_config = self._update_render_config(self._render_config, kwargs)
         return self._render_procedure_attn(
-            self._thre3d_repr, rays, render_config, parallel_points_chunk_size
+            self._thre3d_repr, rays, render_config, parallel_points_chunk_size, orig_densities
         )
 
     def render(
@@ -199,7 +199,7 @@ class VolumetricModel:
             parallel_rays_chunk_size: Optional[int] = 32768,
             parallel_points_chunk_size: Optional[int] = None,
             gpu_render: bool = True,
-            verbose: bool = False,
+            verbose: bool = False, orig_densities=False,
             **kwargs,
     ) -> RenderOutAttn:
         """
@@ -238,7 +238,7 @@ class VolumetricModel:
             ):
                 rendered_chunk = self.render_rays_attn(
                     flat_rays[chunk_index: chunk_index + parallel_rays_chunk_size],
-                    parallel_points_chunk_size,
+                    parallel_points_chunk_size, orig_densities,
                     **kwargs,
                 )
                 if not gpu_render:
@@ -280,11 +280,11 @@ def create_volumetric_model_from_saved_model(
 def create_volumetric_model_from_saved_model_attn(
         model_path: Path,
         thre3d_repr_creator: Callable[[Dict[str, Any]], Module],
-        device: torch.device = torch.device("cpu"), add_attn=False
+        device: torch.device = torch.device("cpu"), load_attn=False
 ) -> Tuple[VolumetricModel, Dict[str, Any]]:
     # load the saved model's data using
     model_data = torch.load(model_path)
-    thre3d_repr = thre3d_repr_creator(model_data, load_attn=add_attn)
+    thre3d_repr = thre3d_repr_creator(model_data, load_attn=load_attn)
     render_config = model_data[RENDER_CONFIG_TYPE](**model_data[RENDER_CONFIG])
 
     # return a newly constructed VolumetricModel using the info above

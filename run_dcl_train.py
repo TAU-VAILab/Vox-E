@@ -9,10 +9,10 @@ from easydict import EasyDict
 from torch.backends import cudnn
 
 from thre3d_atom.data.datasets import PosedImagesDataset
-from thre3d_atom.modules.attn_grid_trainer import train_attn_grid
+from thre3d_atom.modules.dcl_trainer import train_dcl
 from thre3d_atom.modules.volumetric_model import (
     VolumetricModel,
-    create_volumetric_model_from_saved_model_attn,
+    create_volumetric_model_from_saved_model_attn, create_volumetric_model_from_saved_model
 )
 from thre3d_atom.rendering.volumetric.utils.misc import (
     compute_expected_density_scale_for_relu_field_grid,
@@ -23,7 +23,7 @@ from thre3d_atom.thre3d_reprs.renderers import (
 )
 
 from thre3d_atom.thre3d_reprs.voxels import VoxelGrid, VoxelSize, VoxelGridLocation, \
-    create_voxel_grid_from_saved_info_dict_attn
+    create_voxel_grid_from_saved_info_dict_attn, create_voxel_grid_from_saved_info_dict
 from thre3d_atom.utils.constants import NUM_COLOUR_CHANNELS
 from thre3d_atom.utils.logging import log
 from thre3d_atom.utils.misc import log_config_to_disk
@@ -47,16 +47,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Required arguments:
 @click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path to the input dataset")
-@click.option("-i", "--sds_model_path", type=click.Path(file_okay=True, dir_okay=False),
-              required=True, help="path to the pre-trained sds model")
+@click.option("-i", "--sds_attn_model_path", type=click.Path(file_okay=True, dir_okay=False),
+              required=True, help="path to the attention grid sds model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for training output")
-@click.option("-p", "--prompt", type=click.STRING, required=True,
-              help="prompt used for attention")
-@click.option("-idx", "--indices_to_attn", type=click.INT, required=True,
-              help="indices to apply attention to")
-@click.option("-t", "--timestamp", type=click.INT, required=True,
-              help="diffusion_timestamp")
+@click.option("-pre", "--pretrained_model_path", type=click.STRING, required=True,
+              help="path to the pre-trained model")
+
 # Input dataset related arguments:
 @click.option("--separate_train_test_folders", type=click.BOOL, required=False,
               default=True, help="whether the data directory has separate train and test folders",
@@ -103,7 +100,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=2000,
+@click.option("--num_iterations_per_stage", type=click.INT, required=False, default=500,
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
@@ -128,7 +125,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of iterations after which a model is saved", show_default=True)
 @click.option("--test_frequency", type=click.INT, required=False, default=250,
               help="number of iterations after which test metrics are computed", show_default=True)
-@click.option("--feedback_frequency", type=click.INT, required=False, default=1000,
+@click.option("--feedback_frequency", type=click.INT, required=False, default=100,
               help="number of iterations after which rendered feedback is generated", show_default=True)
 @click.option("--summary_frequency", type=click.INT, required=False, default=50,
               help="number of iterations after which training-loss/other-summaries are logged", show_default=True)
@@ -148,8 +145,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)
 @click.option("--new_frame_frequency", type=click.INT, required=False, default=1,
               help="number of iterations where we work on the same pose", show_default=True)
-@click.option("--attn_weight", type=click.INT, required=False, default=10,
-              help="number of iterations where we work on the same pose", show_default=True)
+@click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=0.0,
+              help="weight for density correlation loss", show_default=True)
+
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -163,7 +162,8 @@ def main(**kwargs) -> None:
                id=wandb.util.generate_id())
     # parse os-checked path-strings into Pathlike Paths :)
     data_path = Path(config.data_path)
-    model_path = Path(config.sds_model_path)
+    sds_attn_model_path = Path(config.sds_attn_model_path)
+    pretrained_model_path = Path(config.pretrained_model_path)
     output_path = Path(config.output_path)
 
     # save a copy of the configuration for reference
@@ -188,20 +188,24 @@ def main(**kwargs) -> None:
         )
         test_dataset = None
 
-    vol_mod, _ = create_volumetric_model_from_saved_model_attn(
-        model_path=model_path,
+    sds_attn_vol_mod, _ = create_volumetric_model_from_saved_model_attn(
+        model_path=sds_attn_model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
+        device=device, load_attn=True
+    )
+
+    pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
+        model_path=pretrained_model_path,
+        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
         device=device,
     )
 
     # train the model:
-    train_attn_grid(
-        vol_mod=vol_mod,
+    train_dcl(
+        sds_attn_vol_mod=sds_attn_vol_mod,
+        pretrained_vol_mod=pretrained_vol_mod,
         train_dataset=train_dataset,
         output_dir=output_path,
-        prompt=config.prompt,
-        indices_to_attn= [config.indices_to_attn],
-        timestamp=config.timestamp,
         ray_batch_size=config.ray_batch_size,
         num_stages=config.num_stages,
         num_iterations_per_stage=config.num_iterations_per_stage,
@@ -220,7 +224,7 @@ def main(**kwargs) -> None:
         directional_dataset=config.directional_dataset,
         use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
-        attn_weight=config.attn_weight
+        density_correlation_weight=config.density_correlation_weight
     )
 
 
