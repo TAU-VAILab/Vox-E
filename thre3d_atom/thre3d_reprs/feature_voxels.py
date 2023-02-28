@@ -2,6 +2,7 @@
 from typing import Tuple, NamedTuple, Optional, Callable, Dict, Any
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 from torch.nn import Module
 from torch.nn.functional import grid_sample, interpolate
@@ -11,7 +12,7 @@ from thre3d_atom.thre3d_reprs.constants import (
     STATE_DICT,
     u_DENSITIES,
     u_FEATURES,
-    CONFIG_DICT, u_ATTN,
+    CONFIG_DICT,
 )
 from thre3d_atom.utils.imaging_utils import adjust_dynamic_range
 
@@ -43,26 +44,31 @@ class AxisAlignedBoundingBox(NamedTuple):
     z_range: Tuple[float, float]
 
 
-class VoxelGrid(Module):
+class FeatureVoxelGrid(Module):
     def __init__(
-            self,
-            # grid values:
-            densities: Tensor,
-            features: Tensor,
-            # grid coordinate-space properties:
-            voxel_size: VoxelSize,
-            grid_location: Optional[VoxelGridLocation] = VoxelGridLocation(),
-            # density activations:
-            density_preactivation: Callable[[Tensor], Tensor] = torch.abs,
-            density_postactivation: Callable[[Tensor], Tensor] = torch.nn.Identity(),
-            # feature activations:
-            feature_preactivation: Callable[[Tensor], Tensor] = torch.nn.Identity(),
-            feature_postactivation: Callable[[Tensor], Tensor] = torch.nn.Identity(),
-            # radiance function / transfer function:
-            radiance_transfer_function: Callable[[Tensor, Tensor], Tensor] = None,
-            expected_density_scale: float = 1.0,
-            tunable: bool = False,
-            attn=None
+        self,
+        # grid values:
+        densities: Tensor,
+        features: Tensor,
+        # grid coordinate-space properties:
+        voxel_size: VoxelSize,
+        grid_location: Optional[VoxelGridLocation] = VoxelGridLocation(),
+        # density activations:
+        density_preactivation: Callable[[Tensor], Tensor] = torch.abs,
+        density_postactivation: Callable[[Tensor], Tensor] = torch.nn.Identity(),
+        # feature activations:
+        feature_preactivation: Callable[[Tensor], Tensor] = torch.nn.Identity(),
+        feature_postactivation: Callable[[Tensor], Tensor] = torch.nn.Identity(),
+        # radiance function / transfer function:
+        radiance_transfer_function: Callable[[Tensor, Tensor], Tensor] = None,
+        expected_density_scale: float = 1.0,
+        tunable: bool = False,
+        rgbnet: nn.Module = None,
+        rgbnet_width: int = 64,
+        rgbnet_depth: int = 4,
+        densitynet: nn.Module = None,
+        densitynet_width: int = 64,
+        densitynet_depth: int = 4,
     ):
         """
         Defines a Voxel-Grid denoting a 3D-volume. To obtain features of a particular point inside
@@ -83,13 +89,7 @@ class VoxelGrid(Module):
         """
         # as usual start with assertions about the inputs:
         assert (
-                len(densities.shape) == 4 and densities.shape[-1] == 1
-        ), f"features should be of shape [W x D x H x 1] as opposed to ({features.shape})"
-        assert (
-                len(features.shape) == 4
-        ), f"features should be of shape [W x D x H x F] as opposed to ({features.shape})"
-        assert (
-                densities.device == features.device
+            densities.device == features.device
         ), f"densities and features are not on the same device :("
 
         super().__init__()
@@ -106,19 +106,38 @@ class VoxelGrid(Module):
         self._voxel_size = voxel_size
         self._expected_density_scale = expected_density_scale
         self._tunable = tunable
-        self.attn = attn
-        self.orig_densities = densities
 
         if tunable:
             self._densities = torch.nn.Parameter(self._densities)
             self._features = torch.nn.Parameter(self._features)
-<<<<<<< HEAD
-            if attn is not None:
-                self.attn = torch.nn.Parameter(self.attn)
 
-=======
-            
->>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
+        # set RGB net:
+        if rgbnet != None:
+            self.rgbnet = rgbnet.to(features.device)
+        else:
+            self.rgbnet = nn.Sequential(
+                    nn.Linear(8, rgbnet_width), nn.ReLU(inplace=True),
+                    *[
+                        nn.Sequential(nn.Linear(rgbnet_width, rgbnet_width), nn.ReLU(inplace=True))
+                        for _ in range(rgbnet_depth-2)
+                    ],
+                    nn.Linear(rgbnet_width, 3),
+                ).to(features.device)
+            nn.init.constant_(self.rgbnet[-1].bias, 0)
+
+        # set Density net:
+        if densitynet != None:
+            self.densitynet = densitynet.to(densities.device)
+        else:
+            self.densitynet = nn.Sequential(
+                    nn.Linear(12, densitynet_width), nn.ReLU(inplace=True),
+                    *[
+                        nn.Sequential(nn.Linear(densitynet_width, densitynet_width), nn.ReLU(inplace=True))
+                        for _ in range(densitynet_depth-2)
+                    ],
+                    nn.Linear(densitynet_width, 1),
+                ).to(densities.device)
+            nn.init.constant_(self.densitynet[-1].bias, 0)
 
         # either densities or features can be used:
         self._device = features.device
@@ -133,11 +152,6 @@ class VoxelGrid(Module):
         # setup the bounding box planes
         self._aabb = self._setup_bounding_box_planes()
 
-    def add_attn_params(self, attn):
-        self.attn = torch.nn.Parameter(attn)
-    def update_orig_densities(self):
-        self.orig_densities = self._densities.clone().detach()
-
     @property
     def densities(self) -> Tensor:
         return self._densities
@@ -149,7 +163,7 @@ class VoxelGrid(Module):
     @features.setter
     def features(self, features: Tensor) -> None:
         assert (
-                features.shape == self._features.shape
+            features.shape == self._features.shape
         ), f"new features don't match original feature tensor's dimensions"
         if self._tunable and not isinstance(features, torch.nn.Parameter):
             self._features = torch.nn.Parameter(features)
@@ -159,7 +173,7 @@ class VoxelGrid(Module):
     @densities.setter
     def densities(self, densities: Tensor) -> None:
         assert (
-                densities.shape == self._densities.shape
+            densities.shape == self._densities.shape
         ), f"new densities don't match original densities tensor's dimensions"
         if self._tunable and not isinstance(densities, torch.nn.Parameter):
             self._densities = torch.nn.Parameter(densities)
@@ -321,7 +335,9 @@ class VoxelGrid(Module):
         )[
             ..., None
         ]  # note this None is required because of the squeeze operation :sweat_smile:
+        #interpolated_densities = self.densitynet(interpolated_densities)
         interpolated_densities = self._density_postactivation(interpolated_densities)
+        
 
         # interpolate and compute features
         preactivated_features = self._feature_preactivation(self._features)
@@ -334,70 +350,7 @@ class VoxelGrid(Module):
             .permute(0, 2, 3, 4, 1)
             .squeeze()
         )
-        interpolated_features = self._feature_postactivation(interpolated_features)
-
-        # apply the radiance transfer function if it is not None and if view-directions are available
-        if self._radiance_transfer_function is not None and viewdirs is not None:
-            interpolated_features = self._radiance_transfer_function(
-                interpolated_features, viewdirs
-            )
-
-        # return a unified tensor containing interpolated features and densities
-        return torch.cat([interpolated_features, interpolated_densities], dim=-1)
-
-    def forward_attn(self, points: Tensor, viewdirs: Optional[Tensor] = None,orig_densities=False) -> Tensor:
-        """
-        computes the features/radiance at the requested 3D points
-        Args:
-            points: Tensor of shape [N x 3 (NUM_COORD_DIMENSIONS)]
-            viewdirs: Tensor of shape [N x 3 (NUM_COORD_DIMENSIONS)]
-                      this tensor represents viewing directions in world-coordinate-system
-        Returns: either Tensor of shape [N x <3 + 1> (NUM_COLOUR_CHANNELS + density)]
-                 or of shape [N x <features + 1> (number of features + density)], depending upon
-                 whether the `self._radiance_transfer_function` is None.
-        """
-        # obtain the range-normalized points for interpolation
-        normalized_points = self._normalize_points(points)
-
-        # interpolate and compute densities
-        # Note the pre- and post-activations :)
-        if orig_densities:
-            preactivated_densities = self._density_preactivation(
-            self.orig_densities * self._expected_density_scale
-        )
-        else:
-            preactivated_densities = self._density_preactivation(
-                self._densities * self._expected_density_scale
-            )  # note the use of the expected density scale
-        interpolated_densities = (
-            grid_sample(
-                # note the weird z, y, x convention of PyTorch's grid_sample.
-                # reference ->
-                # https://discuss.pytorch.org/t/surprising-convention-for-grid-sample-coordinates/79997/3
-                preactivated_densities[None, ...].permute(0, 4, 3, 2, 1),
-                normalized_points[None, None, None, ...],
-                align_corners=False,
-            )
-            .permute(0, 2, 3, 4, 1)
-            .squeeze()
-        )[
-            ..., None
-        ]  # note this None is required because of the squeeze operation :sweat_smile:
-        interpolated_densities = self._density_postactivation(interpolated_densities)
-
-        # interpolate and compute features
-        preactivated_features = self._feature_preactivation(self.attn)
-        interpolated_features = (
-            grid_sample(
-                preactivated_features[None, ...].permute(0, 4, 3, 2, 1),
-                normalized_points[None, None, None, ...],
-                align_corners=False,
-            )
-            .permute(0, 2, 3, 4, 1)
-            .squeeze()
-        )[
-            ..., None
-        ]
+        interpolated_features = self.rgbnet(interpolated_features)
         interpolated_features = self._feature_postactivation(interpolated_features)
 
         # apply the radiance transfer function if it is not None and if view-directions are available
@@ -410,9 +363,10 @@ class VoxelGrid(Module):
         return torch.cat([interpolated_features, interpolated_densities], dim=-1)
 
 
-def scale_voxel_grid_with_required_output_size(
-        voxel_grid: VoxelGrid, output_size: Tuple[int, int, int], mode: str = "trilinear"
-) -> VoxelGrid:
+def scale_feature_voxel_grid_with_required_output_size(
+    voxel_grid: FeatureVoxelGrid, output_size: Tuple[int, int, int], mode: str = "trilinear"
+) -> FeatureVoxelGrid:
+
     # extract relevant information from the original input voxel_grid:
     og_unified_feature_tensor = torch.cat(
         [voxel_grid.features, voxel_grid.densities], dim=-1
@@ -440,83 +394,24 @@ def scale_voxel_grid_with_required_output_size(
     )
 
     # create a new voxel_grid by cloning the input voxel_grid and update the newly scaled properties
-    new_voxel_grid = VoxelGrid(
+    new_voxel_grid = FeatureVoxelGrid(
         densities=new_features[..., -1:],
         features=new_features[..., :-1],
         voxel_size=new_voxel_size,
         **voxel_grid.get_config_dict(),
-    )
-
-    # noinspection PyProtectedMember
-    return new_voxel_grid
-
-def scale_voxel_grid_with_required_output_size_attn(
-        voxel_grid: VoxelGrid, output_size: Tuple[int, int, int], mode: str = "trilinear"
-) -> VoxelGrid:
-    # extract relevant information from the original input voxel_grid:
-    og_unified_feature_tensor = torch.cat(
-        [voxel_grid.features, voxel_grid.densities, voxel_grid.attn], dim=-1
-    )
-    og_voxel_size = voxel_grid.voxel_size
-
-    # compute the new features using pytorch's interpolate function
-    new_features = interpolate(
-        og_unified_feature_tensor.permute(3, 0, 1, 2)[None, ...],
-        size=output_size,
-        mode=mode,
-        align_corners=False,  # never use align_corners=True :D
-        recompute_scale_factor=False,  # this needs to be set for some reason, I can't remember :D
-    )[0]
-    new_features = new_features.permute(1, 2, 3, 0)
-
-    # a paranoid check that the interpolated features have the exact same output_size as required
-    assert new_features.shape[:-1] == output_size
-
-    # new voxel size is also similarly scaled
-    new_voxel_size = VoxelSize(
-        (og_voxel_size.x_size * voxel_grid.width_x) / output_size[0],
-        (og_voxel_size.y_size * voxel_grid.depth_y) / output_size[1],
-        (og_voxel_size.z_size * voxel_grid.height_z) / output_size[2],
-    )
-
-    # create a new voxel_grid by cloning the input voxel_grid and update the newly scaled properties
-    new_voxel_grid = VoxelGrid(
-        densities=new_features[..., -2:],
-        features=new_features[..., :-2],
-        attn=new_features[..., :-1],
-        voxel_size=new_voxel_size,
-        **voxel_grid.get_config_dict(),
+        rgbnet=voxel_grid.rgbnet,
+        densitynet=voxel_grid.densitynet,
     )
 
     # noinspection PyProtectedMember
     return new_voxel_grid
 
 
-def create_voxel_grid_from_saved_info_dict(saved_info: Dict[str, Any]) -> VoxelGrid:
+def create_feature_voxel_grid_from_saved_info_dict(saved_info: Dict[str, Any]) -> FeatureVoxelGrid:
     densities = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_DENSITIES])
     features = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_FEATURES])
-    voxel_grid = VoxelGrid(
+    voxel_grid = FeatureVoxelGrid(
         densities=densities, features=features, **saved_info[THRE3D_REPR][CONFIG_DICT]
     )
     voxel_grid.load_state_dict(saved_info[THRE3D_REPR][STATE_DICT])
-    return voxel_grid
-
-
-def create_voxel_grid_from_saved_info_dict_attn(saved_info: Dict[str, Any], load_attn=False) -> VoxelGrid:
-    densities = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_DENSITIES])
-    features = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_FEATURES])
-    # attn = torch.zeros_like(densities) - 0.5
-    attn = torch.ones_like(densities)
-    if load_attn:
-        attn = torch.empty_like(saved_info[THRE3D_REPR][STATE_DICT][u_ATTN])
-        voxel_grid = VoxelGrid(
-            densities=densities, features=features, attn=attn, **saved_info[THRE3D_REPR][CONFIG_DICT]
-        )
-    else:
-        voxel_grid = VoxelGrid(
-            densities=densities, features=features, **saved_info[THRE3D_REPR][CONFIG_DICT]
-        )
-    voxel_grid.load_state_dict(saved_info[THRE3D_REPR][STATE_DICT])
-    if not load_attn:
-        voxel_grid.add_attn_params(attn)
     return voxel_grid

@@ -34,6 +34,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=True, help="path to the trained (reconstructed) model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for saving rendered output")
+<<<<<<< HEAD
+=======
+@click.option("-r", "--ref_path", type=click.Path(file_okay=True, dir_okay=False), default=None,
+              required=False, help="path for saving rendered output")
+
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
 # Non-required Render configuration options:
 @click.option("--overridden_num_samples_per_ray", type=click.IntRange(min=1), default=512,
               required=False, help="overridden (increased) num_samples_per_ray for beautiful renders :)")
@@ -67,6 +73,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 
+# Output saving additions:
+@click.option("--save_freq", type=click.INT, default=None,
+              required=False, help="frames per second of the video")
+@click.option("-p", "--sds_prompt", type=click.STRING, required=False, default=None,
+              help="sds prompt used for SDS based loss, if not None, prints it out to a file")
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -82,6 +94,7 @@ def main(**kwargs) -> None:
     # create the output path if it doesn't exist
     output_path.mkdir(exist_ok=True, parents=True)
 
+<<<<<<< HEAD
     if config.load_attention:
         vol_mod, extra_info = create_volumetric_model_from_saved_model_attn(
             model_path=model_path,
@@ -95,6 +108,32 @@ def main(**kwargs) -> None:
             thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
             device=device
         )
+=======
+    # save prompt to text file if not None
+    if config.sds_prompt != None:
+        text_path = output_path / "prompt.txt"
+        with open(text_path, 'w') as file:
+            file.write(config.sds_prompt)
+
+    # load volumetric_model from the model_path
+    vol_mod, extra_info = create_volumetric_model_from_saved_model(
+        model_path=model_path,
+        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
+        device=device,
+    )
+    vol_mod.render_config.random_bkgd = False
+    vol_mod.render_config.white_bkgd = True
+
+    # override extra info with ref's if given - raises quality
+    if config.ref_path != None:
+        ref_path = Path(config.ref_path)
+        _, extra_info_ref = create_volumetric_model_from_saved_model(
+            model_path=ref_path,
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
+            device=device,
+        )
+        extra_info = extra_info_ref
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
 
     hemispherical_radius = extra_info[HEMISPHERICAL_RADIUS]
     camera_intrinsics = extra_info[CAMERA_INTRINSICS]
@@ -124,6 +163,7 @@ def main(**kwargs) -> None:
             f"Only available options are: ['thre360' and 'spiral']"
         )
 
+<<<<<<< HEAD
     if config.load_attention:
         if config.use_sd:
             animation_frames, attn = render_camera_path_for_volumetric_model_with_attention_and_diffusion(
@@ -157,6 +197,17 @@ def main(**kwargs) -> None:
             overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
             render_scale_factor=config.render_scale_factor
         )
+=======
+    animation_frames = render_camera_path_for_volumetric_model(
+        vol_mod=vol_mod,
+        camera_path=animation_poses,
+        camera_intrinsics=camera_intrinsics,
+        overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
+        render_scale_factor=config.render_scale_factor,
+        image_save_freq=config.save_freq,
+        image_save_path=output_path,
+    )
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
 
     imageio.mimwrite(
         output_path / "rendered_video.mp4",

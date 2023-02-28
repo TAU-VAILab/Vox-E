@@ -4,31 +4,29 @@ from functools import partial
 from pathlib import Path
 from typing import Callable, Optional
 
-import lpips as lpips
 import imageio
 import torch
 from torch import Tensor
 from torch.nn.functional import l1_loss, mse_loss
-
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from thre3d_atom.data.datasets import PosedImagesDataset
 from thre3d_atom.data.utils import infinite_dataloader
-from thre3d_atom.modules.testers import test_sh_vox_grid_vol_mod_with_posed_images
 from thre3d_atom.modules.volumetric_model import VolumetricModel
 from thre3d_atom.rendering.volumetric.utils.misc import (
     cast_rays,
     collate_rays,
     sample_random_rays_and_pixels_synchronously,
-    sample_rays_and_pixels_synchronously,
-    collate_rays_unflattened,
     flatten_rays,
 )
 from thre3d_atom.thre3d_reprs.renderers import render_sh_voxel_grid
 from thre3d_atom.thre3d_reprs.voxels import (
-    VoxelGrid,
-    scale_voxel_grid_with_required_output_size,
+    VoxelGrid
+)
+from thre3d_atom.thre3d_reprs.voxels_3dunet import (
+    VoxelGrid3dUnet,
+    scale_3dunet_voxel_grid_with_required_output_size,
 )
 from thre3d_atom.utils.constants import (
     CAMERA_BOUNDS,
@@ -46,14 +44,13 @@ from thre3d_atom.visualizations.static import (
     visualize_sh_vox_grid_vol_mod_rendered_feedback,
 )
 
-#from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-#lpips = LearnedPerceptualImagePatchSimilarity(net_type='vgg')
 
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
 
-def train_sh_vox_grid_vol_mod_with_posed_images(
-    vol_mod: VolumetricModel,
+def train_3dunet_vox_grid_vol_mod_with_posed_images(
+    vol_mod_3dunet: VolumetricModel,
+    vol_mod_pretrained: VolumetricModel,
     train_dataset: PosedImagesDataset,
     # required arguments:
     output_dir: Path,
@@ -64,7 +61,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     test_dataset: Optional[PosedImagesDataset] = None,
     image_batch_cache_size: int = 8,
     ray_batch_size: int = 32768,
-    num_stages: int = 4,
+    num_stages: int = 1,
     num_iterations_per_stage: int = 2000,
     scale_factor: float = 2.0,
     # learning_rate and related arguments
@@ -85,7 +82,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     num_workers: int = 4,
     verbose_rendering: bool = True,
     fast_debug_mode: bool = False,
-    lpips_weight: float = 0.0
+    gvg_weight: float = 0.01,
+    specular_weight: float = 1.0,
+    diffuse_weight: float = 1.0,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -120,20 +119,21 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     Returns: the trained version of the VolumetricModel. Also writes multiple assets to disk
     """
     # assertions about the VolumetricModel being used with this TrainProcedure :)
-    assert isinstance(vol_mod.thre3d_repr, VoxelGrid), (
-        f"sorry, cannot use a {type(vol_mod.thre3d_repr)} with this TrainProcedure :(; "
-        f"only a {type(VoxelGrid)} can be used"
-    )
     assert (
-        vol_mod.render_procedure == render_sh_voxel_grid
+        vol_mod_3dunet.render_procedure == render_sh_voxel_grid
     ), f"sorry, non SH-based VoxelGrids cannot be used with this TrainProcedure"
 
-    # lpips vgg computer
-    vgg_lpips_computer = lpips.LPIPS(net="vgg").to(vol_mod.device)
+    best_loss = 9999.9
+
+    # get target grid:
+    pretrained_densities = vol_mod_pretrained.thre3d_repr._densities.detach()
+    pretrained_features = vol_mod_pretrained.thre3d_repr._features.detach()
+    target_grid = torch.cat([pretrained_densities, pretrained_features], dim=-1)
+    grid_v_grid_loss_fn = torch.nn.MSELoss()
 
     # fix the sizes of the feature grids at different stages
     stagewise_voxel_grid_sizes = compute_thre3d_grid_sizes(
-        final_required_resolution=vol_mod.thre3d_repr.grid_dims,
+        final_required_resolution=vol_mod_3dunet.thre3d_repr.grid_dims,
         num_stages=num_stages,
         scale_factor=scale_factor,
     )
@@ -147,19 +147,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             {"downsample_factor": data_downsample_factor * (scale_factor**stage)}
         )
         stagewise_train_datasets.insert(0, PosedImagesDataset(**dataset_config_dict))
-
-    # downscale the feature-grid to the smallest size:
-    with torch.no_grad():
-        # TODO: Possibly create a nice interface for reprs as a resolution of the below warning
-        # noinspection PyTypeChecker
-        vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
-            vol_mod.thre3d_repr,
-            output_size=stagewise_voxel_grid_sizes[0],
-            mode="trilinear",
-        )
-        # reinitialize the scaled features and densities to remove any bias
-        random_initializer(vol_mod.thre3d_repr.densities)
-        random_initializer(vol_mod.thre3d_repr.features)
 
     # setup render_feedback_pose
     real_feedback_image = None
@@ -245,7 +232,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
 
         # setup volumetric_model's optimizer
         current_stage_lr = learning_rate * (stagewise_lr_decay_gamma ** (stage - 1))
-        optimizeable_parameters = vol_mod.thre3d_repr.parameters()
+        optimizeable_parameters = vol_mod_3dunet.thre3d_repr.parameters()
         assert (
             optimizeable_parameters
         ), f"No optimizeable parameters :(. Nothing will happen"
@@ -266,7 +253,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
         )
         log.info(
             f"training stage: {stage}   "
-            f"voxel grid resolution: {vol_mod.thre3d_repr.grid_dims} "
+            f"voxel grid resolution: {vol_mod_3dunet.thre3d_repr.grid_dims} "
             f"training images resolution: [{train_image_height} x {train_image_width}]"
         )
         current_stage_lrs = [
@@ -285,6 +272,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             # sample a batch rays and pixels for a single iteration
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
+            total_loss = 0.0
             images, poses, _ = next(infinite_train_dl)
 
             # cast rays for all the loaded images:
@@ -294,7 +282,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                     cast_rays(
                         current_stage_train_dataset.camera_intrinsics,
                         CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
-                        device=vol_mod.device,
+                        device=vol_mod_3dunet.device,
                     )
                 )
                 rays_list.append(casted_rays)
@@ -304,7 +292,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             pixels = (
                 images.permute(0, 2, 3, 1)
                 .reshape(-1, images.shape[1])
-                .to(vol_mod.device)
+                .to(vol_mod_3dunet.device)
             )
 
             # sample a subset of rays and pixels synchronously
@@ -312,16 +300,25 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                 rays, pixels, ray_batch_size
             )
 
+            # calcualte grid v grid loss (propogate through unet)
+            densities, features = vol_mod_3dunet.thre3d_repr.get_densities_and_features()
+            output = torch.cat([densities, features], dim=-1)
+            #gvg_loss = grid_v_grid_loss_fn(output, target_grid)
+            gvg_loss = _density_correlation_loss(densities, pretrained_densities)
+            gvg_loss_value = gvg_loss.item()
+            total_loss = gvg_weight * gvg_loss
+
             # render a small chunk of rays and compute a loss on it
-            specular_rendered_batch = vol_mod.render_rays(rays_batch)
+            specular_rendered_batch = vol_mod_3dunet.render_rays(rays_batch)
             specular_rendered_pixels_batch = specular_rendered_batch.colour
 
             # compute loss and perform gradient update
             # Main, specular loss
-            total_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch)
+            specular_loss = l1_loss(specular_rendered_pixels_batch, pixels_batch)
+            total_loss = total_loss + specular_loss * specular_weight
 
             # logging info:
-            specular_loss_value = total_loss
+            specular_loss_value = specular_loss
             specular_psnr_value = mse2psnr(
                 mse_loss(specular_rendered_pixels_batch, pixels_batch)
             )
@@ -330,14 +327,14 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             diffuse_loss_value, diffuse_psnr_value = None, None
             if apply_diffuse_render_regularization:
                 # render only the diffuse version for the rays
-                diffuse_rendered_batch = vol_mod.render_rays(
+                diffuse_rendered_batch = vol_mod_3dunet.render_rays(
                     rays_batch, render_diffuse=True
                 )
                 diffuse_rendered_pixels_batch = diffuse_rendered_batch.colour
 
                 # compute diffuse loss
                 diffuse_loss = l1_loss(diffuse_rendered_pixels_batch, pixels_batch)
-                total_loss = total_loss + diffuse_loss
+                total_loss = total_loss + diffuse_loss * diffuse_weight
 
                 # logging info:
                 diffuse_loss_value = diffuse_loss
@@ -366,6 +363,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                     ("diffuse_loss", diffuse_loss_value),
                     ("specular_psnr", specular_psnr_value),
                     ("diffuse_psnr", diffuse_psnr_value),
+                    ("gvg_loss", gvg_loss_value),
                     ("total_loss", total_loss),
                     ("num_epochs", (ray_batch_size * global_step) / dataset_size),
                 ):
@@ -384,6 +382,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                     f"Stage: {stage} "
                     f"Global Iteration: {global_step} "
                     f"Stage Iteration: {stage_iteration} "
+                    f"gvg_loss: {gvg_loss_value: .3f} "
                     f"specular_loss: {specular_loss_value.item(): .3f} "
                     f"specular_psnr: {specular_psnr_value.item(): .3f} "
                 )
@@ -392,10 +391,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                         f"diffuse_loss: {diffuse_loss_value.item(): .3f} "
                         f"diffuse_psnr: {diffuse_psnr_value.item(): .3f} "
                         f"total_loss: {total_loss.item(): .3f} "
-                    )
-                if stage == num_stages and lpips_weight > 0.0:
-                    loss_info_string += (
-                        f"lpips_loss: {lpips_loss.item(): .3f} "
                     )
                 log.info(loss_info_string)
 
@@ -412,40 +407,38 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                 or stage_iteration == 1
                 or stage_iteration == num_iterations_per_stage
             ):
+                # if loss is best we've seen so far - save it:
+                if total_loss.item() < best_loss:
+                    log.info(f"Saving best model so far")
+                    torch.save(
+                        vol_mod_3dunet.get_save_info(
+                            extra_info={
+                                "camera_bounds": camera_bounds,
+                                "camera_intrinsics": camera_intrinsics,
+                                "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
+                            }
+                        ),
+                        model_dir / f"model_best.pth",
+                    )
+                    best_loss = total_loss.item()
+
                 log.info(
                     f"TIME CHECK: time spent actually training "
                     f"till now: {timedelta(seconds=time_spent_actually_training)}"
                 )
                 visualize_sh_vox_grid_vol_mod_rendered_feedback(
-                    vol_mod=vol_mod,
+                    vol_mod=vol_mod_3dunet,
                     vol_mod_name="default",
                     render_feedback_pose=render_feedback_pose,
                     camera_intrinsics=camera_intrinsics,
                     global_step=global_step,
                     feedback_logs_dir=render_dir,
-                    parallel_rays_chunk_size=vol_mod.render_config.parallel_rays_chunk_size,
+                    parallel_rays_chunk_size=vol_mod_3dunet.render_config.parallel_rays_chunk_size,
                     training_time=time_spent_actually_training,
                     log_diffuse_rendered_version=True,
                     use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
-                    overridden_num_samples_per_ray=vol_mod.render_config.render_num_samples_per_ray,
+                    overridden_num_samples_per_ray=vol_mod_3dunet.render_config.render_num_samples_per_ray,
                     verbose_rendering=verbose_rendering,
-                )
-
-            # obtain and log the test metrics
-            if (
-                test_dl is not None
-                and not fast_debug_mode
-                and (
-                    global_step % test_freq == 0
-                    or stage_iteration == num_iterations_per_stage
-                )
-            ):
-                test_sh_vox_grid_vol_mod_with_posed_images(
-                    vol_mod=vol_mod,
-                    test_dl=test_dl,
-                    parallel_rays_chunk_size=ray_batch_size,
-                    tensorboard_writer=tensorboard_writer,
-                    global_step=global_step,
                 )
 
             # save the model
@@ -458,7 +451,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
                     f"saving model-snapshot at stage {stage}, global step {global_step}"
                 )
                 torch.save(
-                    vol_mod.get_save_info(
+                    vol_mod_3dunet.get_save_info(
                         extra_info={
                             CAMERA_BOUNDS: camera_bounds,
                             CAMERA_INTRINSICS: camera_intrinsics,
@@ -478,8 +471,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
             # upsample the feature-grid after the completion of the stage:
             with torch.no_grad():
                 # noinspection PyTypeChecker
-                vol_mod.thre3d_repr = scale_voxel_grid_with_required_output_size(
-                    vol_mod.thre3d_repr,
+                vol_mod_3dunet.thre3d_repr = scale_3dunet_voxel_grid_with_required_output_size(
+                    vol_mod_3dunet.thre3d_repr,
                     output_size=stagewise_voxel_grid_sizes[stage],
                     mode="trilinear",
                 )
@@ -488,7 +481,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     # save the final trained model
     log.info(f"Saving the final model-snapshot :)! Almost there ... yay!")
     torch.save(
-        vol_mod.get_save_info(
+        vol_mod_3dunet.get_save_info(
             extra_info={
                 "camera_bounds": camera_bounds,
                 "camera_intrinsics": camera_intrinsics,
@@ -503,7 +496,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images(
     log.info(
         f"Total actual training time: {timedelta(seconds=time_spent_actually_training)}"
     )
-    return vol_mod
+    return vol_mod_3dunet
 
 
 def _make_dataloader_from_dataset(
@@ -527,3 +520,21 @@ def _make_dataloader_from_dataset(
         else 2,
         persistent_workers=not dataset.cached_data_mode and num_workers > 0,
     )
+
+def _density_correlation_loss(sds_density: Tensor,
+                              regular_density: Tensor):
+    eps = 0.0000001 # for numerical stability
+
+    # Calculate Denominator:
+    sds_var = torch.mean((sds_density - torch.mean(sds_density))**2)
+    regular_var = torch.mean((regular_density - torch.mean(regular_density))**2)
+    denominator = torch.sqrt(sds_var * regular_var)
+
+    # Calculate Covariance:
+    covariance = (sds_density - torch.mean(sds_density)) * \
+        (regular_density - torch.mean(regular_density))
+    covariance = torch.mean(covariance)
+
+    # Return Result:
+    correlation = covariance / (denominator + eps)
+    return 1.0 - correlation

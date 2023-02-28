@@ -1,11 +1,12 @@
 from typing import Sequence, Optional
+import imageio
 
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from matplotlib import colors, cm
 from thre3d_atom.thre3d_reprs.cross_attn import text_under_image
-from thre3d_atom.modules.sds_trainer_attn import get_dir_batch_from_poses
+from thre3d_atom.modules.sds_trainer import _get_dir_batch_from_poses
 from thre3d_atom.modules.volumetric_model import VolumetricModel
 from thre3d_atom.utils.constants import EXTRA_ACCUMULATED_WEIGHTS, NUM_COLOUR_CHANNELS
 from thre3d_atom.utils.imaging_utils import (
@@ -19,11 +20,13 @@ from thre3d_atom.utils.logging import log
 
 
 def render_camera_path_for_volumetric_model(
-        vol_mod: VolumetricModel,
-        camera_path: Sequence[CameraPose],
-        camera_intrinsics: CameraIntrinsics,
-        render_scale_factor: Optional[float] = None,
-        overridden_num_samples_per_ray: Optional[int] = None
+    vol_mod: VolumetricModel,
+    camera_path: Sequence[CameraPose],
+    camera_intrinsics: CameraIntrinsics,
+    render_scale_factor: Optional[float] = None,
+    overridden_num_samples_per_ray: Optional[int] = None,
+    image_save_freq: Optional[int] = None,
+    image_save_path: Optional[str] = None,
 ) -> np.array:
     if render_scale_factor is not None:
         # Render downsampled images for speed if requested
@@ -62,6 +65,13 @@ def render_camera_path_for_volumetric_model(
         frame = np.concatenate([colour_frame, depth_frame, acc_frame], axis=1)
         rendered_frames.append(frame)
 
+        # save image if necessary (used for plots and stuff)
+        if image_save_freq != None:
+            if frame_num % image_save_freq == 0:
+                imageio.imwrite(
+                image_save_path / f"{frame_num}.png",
+                colour_frame,
+        )
 
     return np.stack(rendered_frames)
 
@@ -171,7 +181,7 @@ def render_camera_path_for_volumetric_model_with_attention_and_diffusion(
         # apply post-processing to the depth frame
         colour_frame = to8b(colour_frame)
         depth_frame = postprocess_depth_map(depth_frame, acc_map=acc_frame)
-        dir = get_dir_batch_from_poses(torch.from_numpy(
+        dir = _get_dir_batch_from_poses(torch.from_numpy(
             np.hstack((render_pose.rotation, render_pose.translation))
         ).unsqueeze(0).to(device))[0]
         m_prompt = prompt + f", {dir} view"

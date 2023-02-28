@@ -41,9 +41,15 @@ def seed_everything(seed):
 
 
 class StableDiffusion(nn.Module):
+<<<<<<< HEAD
     def __init__(self, device,
                  sd_version='2.1',
                  hf_key=None,
+=======
+    def __init__(self, device, 
+                 sd_version='2.1', 
+                 hf_key=None, 
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
                  t_sched_start = 1500,
                  t_sched_freq = 500,
                  t_sched_gamma = 1.0,):
@@ -89,8 +95,11 @@ class StableDiffusion(nn.Module):
         # self.scheduler = PNDMScheduler.from_pretrained(model_key, subfolder="scheduler")
 
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
+<<<<<<< HEAD
         self.scheduler.set_timesteps(self.scheduler.config.num_train_timesteps, self.device)
 
+=======
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
         self.min_step_ratio = 0.02
         self.min_step = int(self.num_train_timesteps * self.min_step_ratio)
 
@@ -123,6 +132,7 @@ class StableDiffusion(nn.Module):
         text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
         return text_embeddings
 
+<<<<<<< HEAD
     def get_attn_map(self, prompt, pred_rgb, timestamp=0, indices_to_alter=[7], guidance_scale=100,  logvar=None):
         prompt = [prompt]
         batch_size = len(prompt)
@@ -168,6 +178,20 @@ class StableDiffusion(nn.Module):
 
         self.max_step = int(self.num_train_timesteps * self.max_step_ratio)
 
+=======
+
+    def train_step(self, text_embeddings, pred_rgb, guidance_scale=100, global_step=-1, logvar=None):
+        # schedule max step:
+        if global_step >= self.t_sched_start and global_step % self.t_sched_freq == 0:
+            self.max_step_ratio = self.max_step_ratio * self.t_sched_gamma
+            if self.max_step_ratio < self.min_step_ratio * 2:
+                self.max_step_ratio = self.min_step_ratio * 2 # don't let it get too low!
+            else:
+                print(f"Updating max step to {self.max_step_ratio}")
+
+        self.max_step = int(self.num_train_timesteps * self.max_step_ratio)
+        
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
         # interp to 512x512 to be fed into vae.
         # _t = time.time()
         pred_rgb_512 = F.interpolate(pred_rgb, (512, 512), mode='bilinear', align_corners=False)
@@ -325,10 +349,17 @@ class scoreDistillationLoss(nn.Module):
         self.directional = directional
         # get sd model
         #self.sd_model = StableDiffusion(device,"2.0", hf_key="Fictiverse/Stable_Diffusion_VoxelArt_Model")
+<<<<<<< HEAD
         self.sd_model = StableDiffusion(device,
                                         "2.0",
                                         t_sched_start=t_sched_start,
                                         t_sched_freq=t_sched_freq,
+=======
+        self.sd_model = StableDiffusion(device, 
+                                        "2.0", 
+                                        t_sched_start=t_sched_start, 
+                                        t_sched_freq=t_sched_freq, 
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
                                         t_sched_gamma=t_sched_gamma)
 
         # encode text
@@ -340,7 +371,11 @@ class scoreDistillationLoss(nn.Module):
                 self.text_encodings[dir_prompt] = self.sd_model.get_text_embeds(modified_prompt, '')
         else:
             self.text_encoding = self.sd_model.get_text_embeds(prompt, '')
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
     def get_current_max_step_ratio(self):
         return self.sd_model.get_max_step_ratio()
 
@@ -363,7 +398,11 @@ class scoreDistillationLoss(nn.Module):
                     logvar = None
                 encoding = self.text_encodings[dir_prompt]
                 loss = loss + self.sd_model.train_step(encoding, out_imgs, global_step=global_step, logvar=logvar)
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> a9f9d4b4c2869b41adbd72213e473e8fb7aca64c
         return loss
 
 
