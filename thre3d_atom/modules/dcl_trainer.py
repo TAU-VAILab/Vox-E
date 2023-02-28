@@ -34,7 +34,6 @@ from thre3d_atom.thre3d_reprs.voxels import (
     VoxelGrid,
     scale_voxel_grid_with_required_output_size, scale_voxel_grid_with_required_output_size_attn,
 )
-from thre3d_atom.thre3d_reprs.sd_attn import scoreDistillationLoss, StableDiffusion
 from thre3d_atom.utils.constants import (
     CAMERA_BOUNDS,
     CAMERA_INTRINSICS,

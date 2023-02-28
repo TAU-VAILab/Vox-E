@@ -3,7 +3,7 @@ import click
 import imageio
 import torch
 
-from thre3d_atom.thre3d_reprs.sd_attn import StableDiffusion
+from thre3d_atom.thre3d_reprs.sd import StableDiffusion
 from thre3d_atom.modules.volumetric_model import (
     create_volumetric_model_from_saved_model, create_volumetric_model_from_saved_model_attn
 )
