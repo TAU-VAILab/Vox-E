@@ -161,7 +161,9 @@ class StableDiffusion(nn.Module):
         # schedule max step:
         if global_step >= self.t_sched_start and global_step % self.t_sched_freq == 0:
             self.max_step_ratio = self.max_step_ratio * self.t_sched_gamma
-            #if self.max_step_ratio < self.min_step_ratio * 2:
+
+            # if self.max_step_ratio < self.min_step_ratio * 2:
+
             if self.max_step_ratio < 0.35:
                 #self.max_step_ratio = self.min_step_ratio * 2 # don't let it get too low!
                 self.max_step_ratio = 0.35 # don't let it get too low!

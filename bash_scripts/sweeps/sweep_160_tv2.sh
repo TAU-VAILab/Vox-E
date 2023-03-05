@@ -25,11 +25,12 @@ train_default() {
 	-p "$3" \
 	--directional_dataset=True \
 	--density_correlation_weight=200 \
-	--sds_t_start=6000 \
-	--sds_t_gamma=0.7 \
+	--sds_t_start=4000 \
+	--sds_t_gamma=0.75 \
 	--sds_t_freq=600 \
-	--num_iterations_per_stage=10000 \
-	--lr_gamma=0.96 \
+	--num_iterations_per_stage=8000 \
+	--tv_density_weight=100.0 \
+	--tv_features_weight=100.0 \
 	--sh_degree=0 # we currently only support diffuse
 
 	# Rendering Output Video:
@@ -44,62 +45,63 @@ train_default() {
 
 # STARTING RUN:
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=taxi
 prompt="a render of a taxi made of legos"
 log_name="taxilego"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=dog2
 prompt="a render of a light grey minecraft dog"
 log_name="minecraft_lightgrey"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=gingercat
 prompt="a render of a cat wearing a santa hat"
 log_name="santa"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=gingercat
 prompt="a render of a ginger minecraft cat"
 log_name="ginger_minecraft"
+
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=dog2
 prompt="a render of a light grey dog made of legos"
 log_name="legos_lightgrey"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=dog2
 prompt="a render of a dog wearing big sunglasses"
 log_name="bigglasses"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=gingercat
 prompt="a render of a cat wearing a magician's hat"
 log_name="magicianhat"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=kangaroo
 prompt="a render of a kangaroo on rollerskates"
 log_name="rollerskates"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
-sweep_name=sweep_160_longer_steeper
+sweep_name=sweep_160_tv2
 scene=taxi
 prompt="a render of a yarn doll of a car"
 log_name="yarn"
