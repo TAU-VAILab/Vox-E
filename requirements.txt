@@ -20,3 +20,4 @@ scipy
 ftfy 
 accelerate
 wandb
+PyMaxflow

@@ -40,6 +40,7 @@ from thre3d_atom.utils.logging import log
 from thre3d_atom.utils.misc import compute_thre3d_grid_sizes
 from thre3d_atom.visualizations.static import (
     visualize_camera_rays,
+    visualize_sh_vox_grid_vol_mod_rendered_feedback,
     visualize_sh_vox_grid_vol_mod_rendered_feedback_attn,
 )
 
@@ -56,10 +57,11 @@ mse_loss = torch.nn.MSELoss(reduction='none')
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
 
-def train_attn_grid(
+def refine_model(
+        vol_mod_sds: VolumetricModel,
         vol_mod_edit: VolumetricModel,
         vol_mod_object: VolumetricModel,
-        vol_mod_output: VolumetricModel,
+        vol_mod_ref: VolumetricModel,
         train_dataset: PosedImagesDataset,
         # required arguments:
         output_dir: Path,
@@ -93,6 +95,7 @@ def train_attn_grid(
         attn_tv_weight: float = 0.001,
         refine_freq: int = 1000,
         refine_iters: int = 100,
+        K: int = 5.0,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -281,6 +284,9 @@ def train_attn_grid(
         log_string = f"current stage learning rates: {current_stage_lrs} "
         log.info(log_string)
         last_time = time.perf_counter()
+
+        realearn_attn_grids = False
+
         # -------------------------------------------------------------------------------------
         #  Single Stage Training Loop                                                         |
         # -------------------------------------------------------------------------------------
@@ -292,6 +298,7 @@ def train_attn_grid(
             # load a batch of images and poses (These could already be cached on GPU)
             # please check the `data.datasets` module
 
+            total_loss = 0
             total_loss_edit = 0
             total_loss_object = 0
 
@@ -337,73 +344,151 @@ def train_attn_grid(
             # Get attention Maps
             out_imgs = rendered_output.colour.unsqueeze(0)
             out_imgs = out_imgs.permute((0, 3, 1, 2)).to(vol_mod_edit.device)
-            m_prompt = prompt + f", {direction_batch[0]} view"
-            attn_ranges = list(range(1, edit_idx + 1))
-            #gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
-            #                              indices_to_fetch=[edit_idx, object_idx])
-            gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
-                                          indices_to_fetch=attn_ranges)
-            
+
+            ###############################
+            #### RE - LEARN ATTN GRIDS ####
+            ###############################
+
+            if realearn_attn_grids:
+                m_prompt = prompt + f", {direction_batch[0]} view"
+                gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
+                                              indices_to_fetch=[edit_idx, object_idx])
+
+                visualize_and_log_attention_maps(gt, global_step)
+                edit_attn_map = gt[0]
+                object_attn_map = gt[1]
+
+                edit_attn_rendered_batch = vol_mod_edit.render_rays_attn(rays_batch)
+                edit_attn_rendered_batch = edit_attn_rendered_batch.attn
+
+                object_attn_rendered_batch = vol_mod_object.render_rays_attn(rays_batch)
+                object_attn_rendered_batch = object_attn_rendered_batch.attn
+
+                # calc losses
+                edit_attn_loss = calc_loss_on_attn_grid(attn_render=edit_attn_rendered_batch, 
+                                                        attn_map=edit_attn_map, 
+                                                        token="edit", 
+                                                        global_step=global_step)
+
+                object_attn_loss = calc_loss_on_attn_grid(attn_render=object_attn_rendered_batch, 
+                                                          attn_map=object_attn_map, 
+                                                          token="object", 
+                                                          global_step=global_step)
+
+                edit_attn_render = edit_attn_rendered_batch.reshape(edit_attn_map.shape)
+                object_attn_render = object_attn_rendered_batch.reshape(edit_attn_map.shape)
+                log_and_vis_render_diff(edit_attn_render, object_attn_render, global_step)
+
+
+                total_loss_edit = total_loss_edit + edit_attn_loss
+                tv_loss_edit =_tv_loss_on_grid(vol_mod_edit.thre3d_repr.attn)
+                total_loss_edit = total_loss_edit + tv_loss_edit * attn_tv_weight
+
+                total_loss_object = total_loss_object + object_attn_loss
+                tv_loss_object =_tv_loss_on_grid(vol_mod_object.thre3d_repr.attn)
+                total_loss_object = total_loss_object + tv_loss_object * attn_tv_weight
+
+                # optimization steps:
+                total_loss_edit.backward()
+                optimizer_edit.step()
+                optimizer_edit.zero_grad()
+
+                total_loss_object.backward()
+                optimizer_object.step()
+                optimizer_object.zero_grad()
+
+                # wandb logging:
+                wandb.log({"attn_loss_edit": edit_attn_loss}, step=global_step)
+                wandb.log({"tv_loss_edit": tv_loss_edit}, step=global_step)
+                wandb.log({"total_loss_edit": total_loss_edit}, step=global_step)
+
+                wandb.log({"attn_loss_object": object_attn_loss}, step=global_step)
+                wandb.log({"tv_loss_object": tv_loss_object}, step=global_step)
+                wandb.log({"total_loss_object": total_loss_object}, step=global_step)
+
             wandb.log({"Input Image": wandb.Image(rendered_output.colour.numpy())}, step=global_step)
-            visualize_and_log_attention_maps(gt, global_step)
-            edit_attn_map = gt.pop(edit_idx - 1)
-            rest_of_attn_maps = [t.unsqueeze(dim=-1) for t in gt]
-            object_attn_map = torch.cat(rest_of_attn_maps, dim=-1)
-            object_attn_map, _ = torch.max(object_attn_map, dim=-1)
-            object_attn_map = object_attn_map.squeeze()
-            #edit_attn_map = gt[0]
-            #object_attn_map = gt[1]
 
-            # render a small chunk of rays and compute a loss on it
-            edit_attn_rendered_batch = vol_mod_edit.render_rays_attn(rays_batch)
-            edit_attn_rendered_batch = edit_attn_rendered_batch.attn
+            ##########################
+            #### GET REFINED ATTN ####
+            ##########################
 
-            object_attn_rendered_batch = vol_mod_object.render_rays_attn(rays_batch)
-            object_attn_rendered_batch = object_attn_rendered_batch.attn
+            # get optimized keep mask
+            if (global_step % refine_freq == 0) or (global_step == 1):
+                get_edit_region(vol_mod_edit=vol_mod_edit, 
+                                vol_mod_object=vol_mod_object,
+                                vol_mod_output=vol_mod_sds,
+                                rays=rays_batch,
+                                step=global_step,
+                                K=K)
 
-            # calc losses
-            edit_attn_loss = calc_loss_on_attn_grid(attn_render=edit_attn_rendered_batch, 
-                                                    attn_map=edit_attn_map, 
-                                                    token="edit", 
-                                                    global_step=global_step)
-            
-            object_attn_loss = calc_loss_on_attn_grid(attn_render=object_attn_rendered_batch, 
-                                                      attn_map=object_attn_map, 
-                                                      token="object", 
-                                                      global_step=global_step)
-            
-            edit_attn_render = edit_attn_rendered_batch.reshape(edit_attn_map.shape)
-            object_attn_render = object_attn_rendered_batch.reshape(edit_attn_map.shape)
-            log_and_vis_render_diff(edit_attn_render, object_attn_render, global_step)
-            
+                # change densities and features without optimization:
+                regular_density = vol_mod_ref.thre3d_repr._densities.detach()
+                regular_features = vol_mod_ref.thre3d_repr._features.detach()
+                keep_mask = vol_mod_sds.thre3d_repr.attn != 0
 
-            total_loss_edit = total_loss_edit + edit_attn_loss
-            tv_loss_edit =_tv_loss_on_grid(vol_mod_edit.thre3d_repr.attn)
-            total_loss_edit = total_loss_edit + tv_loss_edit * attn_tv_weight
+                new_density = vol_mod_sds.thre3d_repr._densities.detach()
+                new_density[keep_mask.squeeze()] = regular_density[keep_mask.squeeze()]
+                vol_mod_sds.thre3d_repr._densities = torch.nn.Parameter(new_density)
 
-            total_loss_object = total_loss_object + object_attn_loss
-            tv_loss_object =_tv_loss_on_grid(vol_mod_object.thre3d_repr.attn)
-            total_loss_object = total_loss_object + tv_loss_object * attn_tv_weight
+                new_features = vol_mod_sds.thre3d_repr.features.detach()
+                new_features[keep_mask.squeeze()] = regular_features[keep_mask.squeeze()]
+                vol_mod_sds.thre3d_repr._features = torch.nn.Parameter(new_features)
 
-            # optimization steps:
-            total_loss_edit.backward()
-            optimizer_edit.step()
-            optimizer_edit.zero_grad()
+                visualize_sh_vox_grid_vol_mod_rendered_feedback(
+                            vol_mod=vol_mod_sds,
+                            vol_mod_name="sds_refined",
+                            render_feedback_pose=render_feedback_pose,
+                            camera_intrinsics=camera_intrinsics,
+                            global_step=0,
+                            feedback_logs_dir=render_dir,
+                            parallel_rays_chunk_size=vol_mod_sds.render_config.parallel_rays_chunk_size,
+                            training_time=time_spent_actually_training,
+                            log_diffuse_rendered_version=apply_diffuse_render_regularization,
+                            use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+                            overridden_num_samples_per_ray=vol_mod_sds.render_config.render_num_samples_per_ray,
+                            verbose_rendering=verbose_rendering,
+                            log_wandb=True,
+                        )
 
-            total_loss_object.backward()
-            optimizer_object.step()
-            optimizer_object.zero_grad()
-
-            # wandb logging:
-            wandb.log({"attn_loss_edit": edit_attn_loss}, step=global_step)
-            wandb.log({"tv_loss_edit": tv_loss_edit}, step=global_step)
-            wandb.log({"total_loss_edit": total_loss_edit}, step=global_step)
-
-            wandb.log({"attn_loss_object": object_attn_loss}, step=global_step)
-            wandb.log({"tv_loss_object": tv_loss_object}, step=global_step)
-            wandb.log({"total_loss_object": total_loss_object}, step=global_step)
-
-            wandb.log({"first selected indx in batch": index_batch[0]}, step=global_step)
+            # TODO (ES): Delete Later - keep for now
+            #for refine_iter in range(refine_iters):
+            #    total_loss_out_grid = 0
+            #    sds_density = vol_mod_sds.thre3d_repr._densities
+            #    sds_features = vol_mod_sds.thre3d_repr._features
+#
+            #    density_correlation_loss = _density_correlation_loss(sds_density=sds_density,
+            #                                                         regular_density=regular_density,
+            #                                                         mask=keep_mask)
+            #    total_loss_out_grid = total_loss_out_grid + density_correlation_loss * 100.0
+#
+            #    feature_correlation_loss = _feature_correlation_loss(sds_features=sds_features,
+            #                                                     regular_features=regular_features,
+            #                                                     mask=keep_mask)
+            #    total_loss_out_grid = total_loss_out_grid + feature_correlation_loss * 100.0
+#
+            #    if refine_iter % 20 == 0:
+            #        print(f"Total refine loss: {total_loss_out_grid.item()}")
+            #        visualize_sh_vox_grid_vol_mod_rendered_feedback(
+            #            vol_mod=vol_mod_sds,
+            #            vol_mod_name="sds",
+            #            render_feedback_pose=render_feedback_pose,
+            #            camera_intrinsics=camera_intrinsics,
+            #            global_step=refine_iter,
+            #            feedback_logs_dir=render_dir,
+            #            parallel_rays_chunk_size=vol_mod_sds.render_config.parallel_rays_chunk_size,
+            #            training_time=time_spent_actually_training,
+            #            log_diffuse_rendered_version=apply_diffuse_render_regularization,
+            #            use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+            #            overridden_num_samples_per_ray=vol_mod_sds.render_config.render_num_samples_per_ray,
+            #            verbose_rendering=verbose_rendering,
+            #            log_wandb=True,
+            #        )
+#
+            #    wandb.log({"total_loss_out_grid": total_loss_out_grid.item()}, step=refine_iter)
+#
+            #    total_loss_out_grid.backward()
+            #    optimizer_sds.step()
+            #    optimizer_sds.zero_grad()
 
             # ---------------------------------------------------------------------------------
 
@@ -411,34 +496,34 @@ def train_attn_grid(
             time_spent_actually_training += time.perf_counter() - last_time
 
             # tensorboard summaries feedback
-            if (
-                    global_step % summary_freq == 0
-                    or stage_iteration == 1
-                    or stage_iteration == num_iterations_per_stage
-            ):
-                for summary_name, summary_value in (
-                        ("attn_loss", edit_attn_loss),
-                        ("total_loss", total_loss_edit),
-                        ("num_epochs", (ray_batch_size * global_step) / dataset_size),
-                ):
-                    if summary_value is not None:
-                        tensorboard_writer.add_scalar(
-                            summary_name, summary_value, global_step=global_step
-                        )
+            #if (
+            #        global_step % summary_freq == 0
+            #        or stage_iteration == 1
+            #        or stage_iteration == num_iterations_per_stage
+            #):
+            #    for summary_name, summary_value in (
+            #            ("attn_loss", edit_attn_loss),
+            #            ("total_loss", total_loss_edit),
+            #            ("num_epochs", (ray_batch_size * global_step) / dataset_size),
+            #    ):
+            #        if summary_value is not None:
+            #            tensorboard_writer.add_scalar(
+            #                summary_name, summary_value, global_step=global_step
+            #            )
 
-            # console loss feedback
-            if (
-                    global_step % summary_freq == 0
-                    or stage_iteration == 1
-                    or stage_iteration == num_iterations_per_stage
-            ):
-                loss_info_string = (
-                    f"Stage: {stage} "
-                    f"Global Iteration: {global_step} "
-                    f"Stage Iteration: {stage_iteration} "
-                    f"attn_loss: {edit_attn_loss.item(): .3f} "
-                )
-                log.info(loss_info_string)
+            ## console loss feedback
+            #if (
+            #        global_step % summary_freq == 0
+            #        or stage_iteration == 1
+            #        or stage_iteration == num_iterations_per_stage
+            #):
+            #    loss_info_string = (
+            #        f"Stage: {stage} "
+            #        f"Global Iteration: {global_step} "
+            #        f"Stage Iteration: {stage_iteration} "
+            #        f"attn_loss: {edit_attn_loss.item(): .3f} "
+            #    )
+            #    log.info(loss_info_string)
 
             # step the learning rate schedulers
             if stage_iteration % lr_decay_steps_per_stage == 0:
@@ -464,7 +549,7 @@ def train_attn_grid(
                     )
 
                     visualize_sh_vox_grid_vol_mod_rendered_feedback_attn(
-                        vol_mod=vol_mod_edit,
+                        vol_mod=vol_mod_sds,
                         vol_mod_name="attn",
                         render_feedback_pose=render_feedback_pose,
                         camera_intrinsics=camera_intrinsics,
@@ -547,6 +632,17 @@ def train_attn_grid(
             }
         ),
         model_dir / f"model_final_object.pth",
+    )
+
+    torch.save(
+        vol_mod_sds.get_save_info(
+            extra_info={
+                "camera_bounds": camera_bounds,
+                "camera_intrinsics": camera_intrinsics,
+                "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
+            }
+        ),
+        model_dir / f"model_final_sds.pth",
     )
 
     # training complete yay! :)

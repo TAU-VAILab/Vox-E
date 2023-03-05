@@ -162,7 +162,8 @@ def accumulate_radiance_density_on_rays_attn(
         # add a white background if requested. Mathematically, note that we assume
         # the background to be emitting a solid bright white colour RGB=(1.0, 1.0, 1.0)
         # hence the simplification of the alpha-composition formula :)
-        colour_render = colour_render + (1 - acc_render)
+        # background should be set to 0.0 when rendering attn:
+        colour_render = colour_render + (1 - acc_render) * (0.0) 
 
     # compute depth_render and disparity_render (inverse depth)
     depth_render = (processed_points.depths * weights).sum(dim=-1, keepdims=True)

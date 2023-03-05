@@ -15,8 +15,9 @@ from thre3d_atom.utils.imaging_utils import (
     get_thre360_spiral_animation_poses,
 )
 from thre3d_atom.visualizations.animations import (
-    render_camera_path_for_volumetric_model, render_camera_path_for_volumetric_model_with_attention_and_diffusion,
-    render_camera_path_for_volumetric_model_attn
+    render_camera_path_for_volumetric_model,
+    render_camera_path_for_volumetric_model_attn,
+    render_camera_path_for_volumetric_model_attn_blend
 )
 from easydict import EasyDict
 
@@ -58,7 +59,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=False, help="diffusion_timestamp")
 @click.option("--use_sd", type=click.BOOL, default=False,
               required=False, help="render with stable diffusion")
-@click.option("--load_attention", type=click.BOOL, default=False,
+@click.option("--load_attention", type=click.BOOL, default=True,
               required=False, help="render with attention features")
 @click.option("--prompt", type=click.STRING, required=False, default='',
               help="prompt for attention focus")
@@ -126,20 +127,20 @@ def main(**kwargs) -> None:
 
     if config.load_attention:
         if config.use_sd:
-            animation_frames, attn = render_camera_path_for_volumetric_model_with_attention_and_diffusion(
+            animation_frames, attn = render_camera_path_for_volumetric_model_attn_blend(
                 vol_mod=vol_mod,
                 camera_path=animation_poses,
                 camera_intrinsics=camera_intrinsics,
-                sd_model=sd_model,
-                device=device,
-                prompt=config.prompt,
-                index_to_attn=[config.index_to_attn],
+                #sd_model=sd_model,
+                #device=device,
+                #prompt=config.prompt,
+                #index_to_attn=[config.index_to_attn],
                 overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
                 render_scale_factor=config.render_scale_factor,
                 timestamp=config.timestamp
             )
         else:
-            animation_frames, attn = render_camera_path_for_volumetric_model_attn(
+            animation_frames, attn = render_camera_path_for_volumetric_model_attn_blend(
                 vol_mod=vol_mod,
                 camera_path=animation_poses,
                 camera_intrinsics=camera_intrinsics,
