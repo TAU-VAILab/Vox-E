@@ -510,13 +510,13 @@ def refine_edited_relu_field(
 
         log.info(f"Starting Grid Refinement!")
         get_edit_region(vol_mod_edit=vol_mod_edit, 
-                                vol_mod_object=vol_mod_object,
-                                vol_mod_output=vol_mod_output,
-                                rays=rays_batch,
-                                img_height=im_h, 
-                                img_width=im_w,
-                                step=global_step,
-                                K=kval)
+                        vol_mod_object=vol_mod_object,
+                        vol_mod_output=vol_mod_output,
+                        rays=rays_batch,
+                        img_height=im_h, 
+                        img_width=im_w,
+                        step=global_step,
+                        K=kval)
 
         # change densities and features without optimization:
         regular_density = vol_mod_ref.thre3d_repr._densities.detach()
