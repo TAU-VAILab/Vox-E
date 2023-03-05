@@ -53,7 +53,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="index of edit item, i.e. hat")
 @click.option("-oidx", "--object_idx", type=click.INT, required=False, default=None,
               help="index of object, i.e. cat")
-@click.option("-t", "--timestamp", type=click.INT, required=True,
+@click.option("-t", "--timestamp", type=click.INT, required=False, default=200,
               help="diffusion_timestamp")
 # Input dataset related arguments:
 @click.option("--separate_train_test_folders", type=click.BOOL, required=False,

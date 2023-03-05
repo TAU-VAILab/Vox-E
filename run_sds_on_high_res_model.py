@@ -142,10 +142,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                    "(skips testing and some lengthy visualizations)", show_default=True)
 
 # sds specific stuff
-@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.0000001,
-              help="diffuse weight used for regularization", show_default=True)
-@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.0000001,
-              help="specular weight used for regularization", show_default=True)
 @click.option("--directional_dataset", type=click.BOOL, required=False, default=True,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
                show_default=True)
@@ -244,8 +240,6 @@ def main(**kwargs) -> None:
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         fast_debug_mode=config.fast_debug_mode,
-        diffuse_weight=config.diffuse_weight,
-        specular_weight=config.specular_weight,
         sds_prompt=config.prompt,
         directional_dataset=config.directional_dataset,
         use_uncertainty=config.use_uncertainty,

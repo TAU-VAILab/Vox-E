@@ -85,8 +85,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     num_workers: int = 4,
     verbose_rendering: bool = True,
     fast_debug_mode: bool = False,
-    diffuse_weight: float = 0.001,
-    specular_weight: float = 0.001,
     sds_prompt: str = "none",
     directional_dataset: bool = False,
     use_uncertainty: bool = False,

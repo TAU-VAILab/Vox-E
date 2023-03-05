@@ -44,12 +44,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Required arguments:
 @click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path to the input dataset")
-@click.option("-i", "--pretrained_model_path", type=click.Path(file_okay=True, dir_okay=False),
+@click.option("-i", "--ref_model_path", type=click.Path(file_okay=True, dir_okay=False),
               required=True, help="path to the pre-trained relu field model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for training output")
 @click.option("-p", "--prompt", type=click.STRING, required=True,
               help="sds prompt used for SDS based loss")
+@click.option("-eidx", "--edit_idx", type=click.INT, required=True,
+              help="index of edit item, i.e. hat")
+@click.option("-oidx", "--object_idx", type=click.INT, required=False, default=None,
+              help="index of object, i.e. cat")
+@click.option("-t", "--timestamp", type=click.INT, required=False, default=200,
+              help="diffusion_timestamp")
 
 # Input dataset related arguments:
 @click.option("--separate_train_test_folders", type=click.BOOL, required=False,
@@ -100,11 +106,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_edit", type=click.INT, required=False, default=8000,
+@click.option("--num_iterations_edit", type=click.INT, required=False, default=4000, # TODO (ES): Change back to 8k later
               help="number of training iterations performed in the editing (SDS) stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.025,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.027,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_freq", type=click.INT, required=False, default=400,
               help="frequency in which to reduce learning rate", show_default=True)
@@ -140,10 +146,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                    "(skips testing and some lengthy visualizations)", show_default=True)
 
 # sds specific stuff
-@click.option("--diffuse_weight", type=click.FLOAT, required=False, default=0.0000001,
-              help="diffuse weight used for regularization", show_default=True)
-@click.option("--specular_weight", type=click.FLOAT, required=False, default=0.0000001,
-              help="specular weight used for regularization", show_default=True)
 @click.option("--directional_dataset", type=click.BOOL, required=False, default=True,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
                show_default=True)
@@ -197,7 +199,7 @@ def main(**kwargs) -> None:
                id=wandb.util.generate_id())
     # parse os-checked path-strings into Pathlike Paths :)
     data_path = Path(config.data_path)
-    model_path = Path(config.high_res_model_path)
+    model_path = Path(config.ref_model_path)
     output_path = Path(config.output_path)
 
     # save a copy of the configuration for reference
@@ -256,8 +258,6 @@ def main(**kwargs) -> None:
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         fast_debug_mode=config.fast_debug_mode,
-        diffuse_weight=config.diffuse_weight,
-        specular_weight=config.specular_weight,
         sds_prompt=config.prompt,
         directional_dataset=config.directional_dataset,
         use_uncertainty=config.use_uncertainty,
