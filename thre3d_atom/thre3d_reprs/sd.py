@@ -123,7 +123,7 @@ class StableDiffusion(nn.Module):
         text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
         return text_embeddings
 
-    def get_attn_map(self, prompt, pred_rgb, timestamp=0, indices_to_alter=[7], guidance_scale=100,  logvar=None):
+    def get_attn_map(self, prompt, pred_rgb, timestamp=0, indices_to_fetch=[7], guidance_scale=100,  logvar=None):
         prompt = [prompt]
         batch_size = len(prompt)
         controller = ca.AttentionStore()
@@ -148,20 +148,22 @@ class StableDiffusion(nn.Module):
             latents = controller.step_callback(latents)
 
             attn_maps = None
-            if indices_to_alter is not None:
+            if indices_to_fetch is not None:
                 attn_maps = ca.aggregate_and_get_max_attention_per_token(
                     prompts=prompt,
                     attention_store=controller,
-                    indices_to_alter=indices_to_alter, orig_im_h=orig_im_h, orig_im_w=orig_im_h
+                    indices_to_alter=indices_to_fetch, orig_im_h=orig_im_h, orig_im_w=orig_im_h
                 )
-        return attn_maps[0], t.item()
+        return attn_maps, t.item()
 
 
     def train_step(self, text_embeddings, pred_rgb, guidance_scale=100, global_step=-1, logvar=None):
         # schedule max step:
         if global_step >= self.t_sched_start and global_step % self.t_sched_freq == 0:
             self.max_step_ratio = self.max_step_ratio * self.t_sched_gamma
+
             # if self.max_step_ratio < self.min_step_ratio * 2:
+
             if self.max_step_ratio < 0.35:
                 #self.max_step_ratio = self.min_step_ratio * 2 # don't let it get too low!
                 self.max_step_ratio = 0.35 # don't let it get too low!

@@ -605,43 +605,13 @@ def _density_correlation_loss(sds_density: Tensor,
 def _feature_correlation_loss(sds_features: Tensor,
                               regular_features: Tensor,
                               density_cov_grid):
-    eps = 0.0000001 # for numerical stability
     regular_features = regular_features.detach()
-    norm_density_cov_grid = (density_cov_grid - density_cov_grid.min()  + eps) \
-        / (density_cov_grid.max() + eps)
-    weights = torch.nn.functional.softmax(torch.flatten(norm_density_cov_grid))
-    weights = torch.reshape(weights, density_cov_grid.shape)
-
     sds_features_colors = torch.sigmoid(sds_features)
     regular_features_colors = torch.sigmoid(regular_features)
     l2_diffs = torch.sum(sds_features_colors - regular_features_colors, dim=-1) ** 2
-    loss = torch.sum(weights * l2_diffs)
     loss = torch.sum(l2_diffs)
     return loss
 
-
-    ## normalize cov grid:
-    #eps = 0.0000001 # for numerical stability
-
-    #norm_density_cov_grid = (density_cov_grid - density_cov_grid.min()  + eps) \
-    #    / (density_cov_grid.max() + eps)
-
-    ## Calculate Denominator:
-    #sds_var = torch.mean((sds_features - torch.mean(sds_features, dim=0))**2)
-    #regular_var = torch.mean((regular_features - torch.mean(regular_features, dim=0))**2)
-    #denominator = torch.sqrt(sds_var * regular_var)
-
-    ## Calculate Covariance:
-    #covariance_grid = (sds_features - torch.mean(sds_features, dim=0)) * \
-    #    (regular_features - torch.mean(regular_features, dim=0))
-    #
-    ## multiply the cov grid by the densities cov grid to enforce correlation in meaningful places
-    #covariance_grid = covariance_grid * norm_density_cov_grid
-    #covariance = torch.mean(covariance_grid)
-
-    ## Return Result:
-    #correlation = covariance / (denominator + eps)
-    #return 1.0 - correlation
 
 def _get_dir_batch_from_poses(poses: Tensor):
     dir_batch = []
