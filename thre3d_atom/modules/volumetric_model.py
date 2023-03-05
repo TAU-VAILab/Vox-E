@@ -269,7 +269,7 @@ def create_volumetric_model_from_saved_model(
         VolumetricModel(
             thre3d_repr=thre3d_repr,
             render_procedure=model_data[RENDER_PROCEDURE],
-            render_procedure_attn=None,
+            render_procedure_attn=render_sh_voxel_grid_attn,
             render_config=render_config,
             device=device,
         ),

@@ -106,11 +106,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of samples taken per ray during training", show_default=True)
 @click.option("--num_stages", type=click.INT, required=False, default=1,
               help="number of progressive growing stages used in training", show_default=True)
-@click.option("--num_iterations_edit", type=click.INT, required=False, default=4000, # TODO (ES): Change back to 8k later
+@click.option("--num_iterations_edit", type=click.INT, required=False, default=8000,
               help="number of training iterations performed in the editing (SDS) stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.027,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.025,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_freq", type=click.INT, required=False, default=400,
               help="frequency in which to reduce learning rate", show_default=True)
@@ -185,6 +185,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @click.option("--kval", type=click.FLOAT, required=False, default=5.0,
               help="k value used in graphcut", show_default=True)
+@click.option("--attn_tv_weight", type=click.FLOAT, required=False, default=0.01,
+              help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
 @click.option("--num_iterations_refine", type=click.INT, required=False, default=1500,
               help="number of training iterations performed in the refinement stage", show_default=True)
 
@@ -271,7 +273,7 @@ def main(**kwargs) -> None:
         sds_t_start=config.sds_t_start,
         sds_t_gamma=config.sds_t_gamma,
     )
-
+    
     # exit here if not going to refine stage
     if not config.do_refinement:
         return
@@ -304,9 +306,6 @@ def main(**kwargs) -> None:
         num_iterations_per_stage=config.num_iterations_refine,
         scale_factor=config.scale_factor,
         learning_rate=config.learning_rate,
-        lr_decay_gamma_per_stage=config.lr_decay_gamma_per_stage,
-        lr_decay_steps_per_stage=config.lr_decay_steps_per_stage,
-        stagewise_lr_decay_gamma=config.stagewise_lr_decay_gamma,
         save_freq=config.save_frequency,
         feedback_freq=config.feedback_frequency,
         summary_freq=config.summary_frequency,

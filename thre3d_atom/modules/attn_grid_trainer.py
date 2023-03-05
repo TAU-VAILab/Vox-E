@@ -76,7 +76,7 @@ def refine_edited_relu_field(
         # learning_rate and related arguments
         learning_rate: float = 0.03,
         lr_decay_gamma_per_stage: float = 0.1,
-        lr_decay_steps_per_stage: int = 1000,
+        lr_decay_steps_per_stage: int = 2000,
         stagewise_lr_decay_gamma: float = 0.9,
         # option to have a specific feedback_pose_for_visual feedback rendering
         render_feedback_pose: Optional[CameraPose] = None,
