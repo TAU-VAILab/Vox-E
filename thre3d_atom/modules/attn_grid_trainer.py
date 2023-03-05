@@ -39,7 +39,7 @@ from thre3d_atom.utils.imaging_utils import CameraPose, to8b
 from thre3d_atom.utils.logging import log
 from thre3d_atom.utils.misc import compute_thre3d_grid_sizes
 from thre3d_atom.visualizations.static import (
-    visualize_camera_rays,
+    visualize_sh_vox_grid_vol_mod_rendered_feedback,
     visualize_sh_vox_grid_vol_mod_rendered_feedback_attn,
 )
 
@@ -56,17 +56,18 @@ mse_loss = torch.nn.MSELoss(reduction='none')
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
 
-def train_attn_grid(
+def refine_edited_relu_field(
         vol_mod_edit: VolumetricModel,
         vol_mod_object: VolumetricModel,
         vol_mod_output: VolumetricModel,
+        vol_mod_ref: VolumetricModel,
         train_dataset: PosedImagesDataset,
         # required arguments:
         output_dir: Path,
         prompt: str,
         edit_idx: int,
-        object_idx: int,
         timestamp: int,
+        object_idx: int = None,
         image_batch_cache_size: int = 8,
         ray_batch_size: int = 32768,
         num_stages: int = 1,
@@ -88,11 +89,9 @@ def train_attn_grid(
         # miscellaneous options can be left untouched
         num_workers: int = 4,
         verbose_rendering: bool = True,
-        fast_debug_mode: bool = False,
         directional_dataset: bool = False,
         attn_tv_weight: float = 0.001,
-        refine_freq: int = 1000,
-        refine_iters: int = 100,
+        kval: float = 5.0
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -213,18 +212,6 @@ def train_attn_grid(
     # setup tensorboard writer
     tensorboard_writer = SummaryWriter(str(tensorboard_dir))
 
-    # create camera-rays visualization:
-    if not fast_debug_mode:
-        log.info(
-            "creating a camera-rays visualization... please wait... "
-            "this is a slow operation :D"
-        )
-        visualize_camera_rays(
-            train_dataset,
-            output_dir,
-            num_rays_per_image=1,
-        )
-
     # start actual training
     log.info("beginning training")
     time_spent_actually_training = 0
@@ -338,21 +325,27 @@ def train_attn_grid(
             out_imgs = rendered_output.colour.unsqueeze(0)
             out_imgs = out_imgs.permute((0, 3, 1, 2)).to(vol_mod_edit.device)
             m_prompt = prompt + f", {direction_batch[0]} view"
-            attn_ranges = list(range(1, edit_idx + 1))
-            #gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
-            #                              indices_to_fetch=[edit_idx, object_idx])
-            gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
-                                          indices_to_fetch=attn_ranges)
-            
             wandb.log({"Input Image": wandb.Image(rendered_output.colour.numpy())}, step=global_step)
+
+            # if no object idx is given (default) take the maximum between all non-edit tokens
+            if object_idx == None:
+                indices_to_fetch = list(range(1, edit_idx + 1))
+            else:
+                indices_to_fetch = [edit_idx, object_idx]
+                
+            gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
+                                          indices_to_fetch=indices_to_fetch)
             visualize_and_log_attention_maps(gt, global_step)
-            edit_attn_map = gt.pop(edit_idx - 1)
-            rest_of_attn_maps = [t.unsqueeze(dim=-1) for t in gt]
-            object_attn_map = torch.cat(rest_of_attn_maps, dim=-1)
-            object_attn_map, _ = torch.max(object_attn_map, dim=-1)
-            object_attn_map = object_attn_map.squeeze()
-            #edit_attn_map = gt[0]
-            #object_attn_map = gt[1]
+
+            if object_idx == None:
+                edit_attn_map = gt.pop(edit_idx - 1)
+                rest_of_attn_maps = [t.unsqueeze(dim=-1) for t in gt]
+                object_attn_map = torch.cat(rest_of_attn_maps, dim=-1)
+                object_attn_map, _ = torch.max(object_attn_map, dim=-1)
+                object_attn_map = object_attn_map.squeeze()
+            else:
+                edit_attn_map = gt[0]
+                object_attn_map = gt[1]
 
             # render a small chunk of rays and compute a loss on it
             edit_attn_rendered_batch = vol_mod_edit.render_rays_attn(rays_batch)
@@ -512,6 +505,48 @@ def train_attn_grid(
             # ignore all the time spent doing verbose stuff :) and update
             # the last_time clock event
             last_time = time.perf_counter()
+
+        # -------------------------------------------------------------------------------------
+
+        log.info(f"Starting Grid Refinement!")
+        get_edit_region(vol_mod_edit=vol_mod_edit, 
+                                vol_mod_object=vol_mod_object,
+                                vol_mod_output=vol_mod_output,
+                                rays=rays_batch,
+                                img_height=im_h, 
+                                img_width=im_w,
+                                step=global_step,
+                                K=kval)
+
+        # change densities and features without optimization:
+        regular_density = vol_mod_ref.thre3d_repr._densities.detach()
+        regular_features = vol_mod_ref.thre3d_repr._features.detach()
+        keep_mask = vol_mod_output.thre3d_repr.attn != 0
+
+        new_density = vol_mod_output.thre3d_repr._densities.detach()
+        new_density[keep_mask.squeeze()] = regular_density[keep_mask.squeeze()]
+        vol_mod_output.thre3d_repr._densities = torch.nn.Parameter(new_density)
+
+        new_features = vol_mod_output.thre3d_repr.features.detach()
+        new_features[keep_mask.squeeze()] = regular_features[keep_mask.squeeze()]
+        vol_mod_output.thre3d_repr._features = torch.nn.Parameter(new_features)
+
+        visualize_sh_vox_grid_vol_mod_rendered_feedback(
+                    vol_mod=vol_mod_output,
+                    vol_mod_name="sds_refined",
+                    render_feedback_pose=render_feedback_pose,
+                    camera_intrinsics=camera_intrinsics,
+                    global_step=0,
+                    feedback_logs_dir=render_dir,
+                    parallel_rays_chunk_size=vol_mod_output.render_config.parallel_rays_chunk_size,
+                    training_time=time_spent_actually_training,
+                    log_diffuse_rendered_version=apply_diffuse_render_regularization,
+                    use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+                    overridden_num_samples_per_ray=vol_mod_output.render_config.render_num_samples_per_ray,
+                    verbose_rendering=verbose_rendering,
+                    log_wandb=True,
+                )
+
         # -------------------------------------------------------------------------------------
 
         # don't upsample the feature grid if the last stage is complete
@@ -536,7 +571,7 @@ def train_attn_grid(
                 "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
             }
         ),
-        model_dir / f"model_final_edit.pth",
+        model_dir / f"model_final_attn_edit.pth",
     )
     torch.save(
         vol_mod_object.get_save_info(
@@ -546,7 +581,17 @@ def train_attn_grid(
                 "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
             }
         ),
-        model_dir / f"model_final_object.pth",
+        model_dir / f"model_final_attn_object.pth",
+    )
+    torch.save(
+        vol_mod_output.get_save_info(
+            extra_info={
+                "camera_bounds": camera_bounds,
+                "camera_intrinsics": camera_intrinsics,
+                "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
+            }
+        ),
+        model_dir / f"model_final_refined.pth",
     )
 
     # training complete yay! :)
@@ -554,7 +599,8 @@ def train_attn_grid(
     log.info(
         f"Total actual training time: {timedelta(seconds=time_spent_actually_training)}"
     )
-    return vol_mod_edit
+
+    return
 
 
 def _make_dataloader_from_dataset(

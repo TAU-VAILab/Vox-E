@@ -59,7 +59,7 @@ def calc_loss_on_attn_grid(attn_render: Tensor, attn_map: Tensor, token: str,
         wandb.log({f"Mask {token}": wandb.Image(mask_frame)}, step=global_step)
 
         ## get rid of large difference between background and foreground caused by -1
-        attn_vis[attn_render <= 0.0] = attn_render.min()
+        attn_vis = attn_render
         norm = colors.Normalize(vmin=0, vmax=torch.max(attn_vis).item())
         attn_vis = cmp(norm(attn_vis.cpu().detach().numpy()))[:, :, :3]
         wandb.log({f"Pred Attn Map {token}": wandb.Image(attn_vis)}, step=global_step)
@@ -300,13 +300,15 @@ def build_graph(features, densities, edit_attn, obj_attn, K = 0.05, sigma = 0.2)
     print(f"{(segments == 1).sum()} Voxels marked as Object")
     return segments, segment_idxs
 
-def visualize_and_log_attn_result_grids(vol_mod_edit: VolumetricModel, 
+def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel, 
                                         vol_mod_object: VolumetricModel, 
                                         vol_mod_output: VolumetricModel,
-                                        rays: Rays, 
+                                        rays: Rays,
+                                        img_height: int,
+                                        img_width: int,
                                         ids: Tensor,
                                         idxs: Tensor,
-                                        step: int):
+                                        step: int = 0):
     
     # first visualize greater than grid:
     m = torch.nn.MaxPool3d(3, stride=1, padding=1)
@@ -320,7 +322,7 @@ def visualize_and_log_attn_result_grids(vol_mod_edit: VolumetricModel,
     vol_mod_output.thre3d_repr.attn = torch.nn.Parameter(gt_grid)
     attn_rendered_batch = vol_mod_output.render_rays_attn(rays)
     attn_rendered_batch = attn_rendered_batch.attn
-    attn_render = attn_rendered_batch.reshape((266, 266))
+    attn_render = attn_rendered_batch.reshape((img_height, img_width))
 
     cmp = cm.get_cmap('jet')
 
@@ -331,13 +333,14 @@ def visualize_and_log_attn_result_grids(vol_mod_edit: VolumetricModel,
 
     # then visualize id based grid (graphcut output):
     gt_grid = torch.ones_like(vol_mod_edit.thre3d_repr.attn) * -20.0
+    gt_grid[nonzero_densities] = -10.0
     edit_ids = (idxs[ids==0]).tolist()
     for idx in edit_ids:
         gt_grid[idx[0], idx[1], idx[2], 0] = 0.0 #maybe unsqueeze() ?
     vol_mod_output.thre3d_repr.attn = torch.nn.Parameter(gt_grid)
     attn_rendered_batch = vol_mod_output.render_rays_attn(rays)
     attn_rendered_batch = attn_rendered_batch.attn
-    attn_render = attn_rendered_batch.reshape((266, 266))
+    attn_render = attn_rendered_batch.reshape((img_height, img_width))
 
     # vis and log greater than attn map:
     norm = colors.Normalize(vmin=0, vmax=torch.max(attn_render).item())
@@ -349,8 +352,10 @@ def get_edit_region(vol_mod_edit: VolumetricModel,
                  vol_mod_object: VolumetricModel, 
                  vol_mod_output: VolumetricModel,
                  rays: Rays, 
-                 step: int,
-                 K: int,
+                 img_height: int,
+                 img_width: int,
+                 step: int = 0,
+                 K: int = 5.0,
                  sigma: float = 0.1,
                  produce_scatter_plot: bool = False):
     # first make sure the densities and features of both grids are the same
@@ -430,13 +435,15 @@ def get_edit_region(vol_mod_edit: VolumetricModel,
                  cluster_ids=ids,
                  step=step)
 
-        visualize_and_log_attn_result_grids(vol_mod_edit=vol_mod_edit, 
-                                            vol_mod_object=vol_mod_object,
-                                            vol_mod_output=vol_mod_output,
-                                            rays=rays,
-                                            ids=ids,
-                                            idxs=idxs,
-                                            step=step)
+        set_and_visualize_refined_grid(vol_mod_edit=vol_mod_edit, 
+                                       vol_mod_object=vol_mod_object,
+                                       vol_mod_output=vol_mod_output,
+                                       rays=rays,
+                                       img_height=img_height,
+                                       img_width=img_width,
+                                       ids=ids,
+                                       idxs=idxs,
+                                       step=step)
         
         print(f"Finished calculating edit / object regions!")
         
