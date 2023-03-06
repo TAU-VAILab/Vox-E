@@ -210,7 +210,7 @@ def build_graph(features, densities, edit_attn, obj_attn, K = 0.05, sigma = 0.2)
     
     # initialize according to max:
     top_prob_edit = torch.max(probs[..., 0])
-    best_voxels_edit_mask = probs[..., 0] >= 0.995 * top_prob_edit
+    best_voxels_edit_mask = probs[..., 0] >= 0.992 * top_prob_edit
     top_k_best_edit_idxs = best_voxels_edit_mask.nonzero().squeeze()
 
     # TODO (ES): delete this commented code later - for now keep it for debugging

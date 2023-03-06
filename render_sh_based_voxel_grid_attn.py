@@ -35,6 +35,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=True, help="path to the trained (reconstructed) model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for saving rendered output")
+@click.option("-r", "--ref_path", type=click.Path(file_okay=True, dir_okay=False), default=None,
+              required=False, help="path for saving rendered output")
+
 # Non-required Render configuration options:
 @click.option("--overridden_num_samples_per_ray", type=click.IntRange(min=1), default=512,
               required=False, help="overridden (increased) num_samples_per_ray for beautiful renders :)")
@@ -61,10 +64,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=False, help="render with stable diffusion")
 @click.option("--load_attention", type=click.BOOL, default=True,
               required=False, help="render with attention features")
-@click.option("--prompt", type=click.STRING, required=False, default='',
+@click.option("--sds_prompt", type=click.STRING, required=False, default='',
               help="prompt for attention focus")
 @click.option("--index_to_attn", type=click.INT, required=False, default=11,
               help="index to apply attention to", show_default=True)
+@click.option("--save_freq", type=click.INT, default=None,
+              required=False, help="frames per second of the video")
 
 
 
@@ -96,6 +101,22 @@ def main(**kwargs) -> None:
             thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
             device=device
         )
+
+    # save prompt to text file if not None
+    if config.sds_prompt != None:
+        text_path = output_path / "prompt.txt"
+        with open(text_path, 'w') as file:
+            file.write(config.sds_prompt)
+
+    # override extra info with ref's if given - raises quality
+    if config.ref_path != None:
+        ref_path = Path(config.ref_path)
+        _, extra_info_ref = create_volumetric_model_from_saved_model(
+            model_path=ref_path,
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
+            device=device,
+        )
+        extra_info = extra_info_ref
 
     hemispherical_radius = extra_info[HEMISPHERICAL_RADIUS]
     camera_intrinsics = extra_info[CAMERA_INTRINSICS]
@@ -131,10 +152,6 @@ def main(**kwargs) -> None:
                 vol_mod=vol_mod,
                 camera_path=animation_poses,
                 camera_intrinsics=camera_intrinsics,
-                #sd_model=sd_model,
-                #device=device,
-                #prompt=config.prompt,
-                #index_to_attn=[config.index_to_attn],
                 overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
                 render_scale_factor=config.render_scale_factor,
                 timestamp=config.timestamp
@@ -145,10 +162,12 @@ def main(**kwargs) -> None:
                 camera_path=animation_poses,
                 camera_intrinsics=camera_intrinsics,
                 overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
-                render_scale_factor=config.render_scale_factor
+                render_scale_factor=config.render_scale_factor,
+                image_save_freq=config.save_freq,
+                image_save_path=output_path,
             )
-        for i, f in enumerate(attn):
-            imageio.imwrite(output_path / "{}.png".format(i), f)
+        #for i, f in enumerate(attn):
+        #    imageio.imwrite(output_path / "{}.png".format(i), f)
 
     else:
         animation_frames = render_camera_path_for_volumetric_model(

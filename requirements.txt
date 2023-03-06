@@ -21,3 +21,5 @@ ftfy
 accelerate
 wandb
 PyMaxflow
+opencv-python
+pandas
