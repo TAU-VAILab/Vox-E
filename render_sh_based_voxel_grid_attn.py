@@ -65,6 +65,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="prompt for attention focus")
 @click.option("--index_to_attn", type=click.INT, required=False, default=11,
               help="index to apply attention to", show_default=True)
+@click.option("--save_freq", type=click.INT, default=None,
+              required=False, help="frames per second of the video")
 
 
 
@@ -131,10 +133,6 @@ def main(**kwargs) -> None:
                 vol_mod=vol_mod,
                 camera_path=animation_poses,
                 camera_intrinsics=camera_intrinsics,
-                #sd_model=sd_model,
-                #device=device,
-                #prompt=config.prompt,
-                #index_to_attn=[config.index_to_attn],
                 overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
                 render_scale_factor=config.render_scale_factor,
                 timestamp=config.timestamp
@@ -145,10 +143,12 @@ def main(**kwargs) -> None:
                 camera_path=animation_poses,
                 camera_intrinsics=camera_intrinsics,
                 overridden_num_samples_per_ray=config.overridden_num_samples_per_ray,
-                render_scale_factor=config.render_scale_factor
+                render_scale_factor=config.render_scale_factor,
+                image_save_freq=config.save_freq,
+                image_save_path=output_path,
             )
-        for i, f in enumerate(attn):
-            imageio.imwrite(output_path / "{}.png".format(i), f)
+        #for i, f in enumerate(attn):
+        #    imageio.imwrite(output_path / "{}.png".format(i), f)
 
     else:
         animation_frames = render_camera_path_for_volumetric_model(
