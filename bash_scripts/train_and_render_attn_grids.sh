@@ -18,7 +18,7 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 train_and_render_attn_grid() {
 	## Train:
 	echo "Starting Training..."
-	python run_attn_grid_on_sds_model.py \
+	python refine_edited_relu_field.py \
 	-d ../data/${1}/ \
 	--ref_model_path=logs/rf/${1}/ref/saved_models/model_final.pth \
 	--sds_model_path=logs/rf/${1}/${3}/saved_models/model_final.pth \
@@ -43,10 +43,10 @@ train_and_render_attn_grid() {
 }
 # STARTING RUN:
 
-scene=dog2
-prompt="a render of a dog wearing big sunglasses"
-log_name="sunglasses" # 1-word description of the prompt for saving
-edit_idx=8
+scene=kangaroo
+prompt="a render of a kangaroo wearing a birthday hat"
+log_name="birthday" # 1-word description of the prompt for saving
+edit_idx=9
 timestamp=200
 
 train_and_render_attn_grid $scene "$prompt" $log_name $edit_idx $object_idx $timestamp
