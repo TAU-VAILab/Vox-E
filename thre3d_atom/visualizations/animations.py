@@ -207,10 +207,9 @@ def render_camera_path_for_volumetric_model_attn_blend(
         attn_frame = (cmp(norm(attn_frame))[:, :, :3])
         #attn_frame_save = (0.5 * attn_frame) + (0.5 * rendered_output.colour.numpy())
         attn_frame = to8b(attn_frame)
-        attn_frame_save = to8b(attn_frame_save)
         frame = np.concatenate([colour_frame, depth_frame, attn_frame], axis=1)
         rendered_frames.append(frame)
-        attn_frames.append(attn_frame_save)
+        attn_frames.append(attn_frame)
 
         # save image if necessary (used for plots and stuff)
         if image_save_freq != None:

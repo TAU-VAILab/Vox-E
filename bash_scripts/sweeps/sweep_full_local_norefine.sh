@@ -24,18 +24,18 @@ train_default() {
 	-i logs/rf/${2}/${1}/ref/saved_models/model_final.pth \
 	-p "$3" \
 	-eidx=${5} \
-	--num_iterations_edit=1000 \
+	--num_iterations_edit=8000 \
 	--directional_dataset=True \
 	--density_correlation_weight=50 \
 	--tv_density_weight=50.0 \
 	--tv_features_weight=100.0 \
 	--learning_rate=0.025 \
-	--do_refinement=True \
+	--do_refinement=False \
 	--sh_degree=0 # we currently only support diffuse
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
-	python render_sh_based_voxel_grid_attn.py \
+	python render_sh_based_voxel_grid.py \
 	-i logs/rf/${2}/${1}/${4}/saved_models/model_final_refined.pth \
 	-o output_renders/${2}/${1}/${4}/ \
 	--ref_path=logs/rf/${2}/${1}/ref/saved_models/model_final.pth \
