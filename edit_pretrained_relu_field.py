@@ -274,48 +274,45 @@ def main(**kwargs) -> None:
         sds_t_gamma=config.sds_t_gamma,
     )
     
-    # exit here if not going to refine stage
-    if not config.do_refinement:
-        return
-    
-    vol_mod_edit, _ = create_volumetric_model_from_saved_model_attn(
-        model_path=output_path / f"saved_models" / f"model_final.pth",
-        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
-        device=device,
-    )
+    if config.do_refinement == True:
+        vol_mod_edit, _ = create_volumetric_model_from_saved_model_attn(
+            model_path=output_path / f"saved_models" / f"model_final.pth",
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
+            device=device,
+        )
 
-    vol_mod_obj, _ = create_volumetric_model_from_saved_model_attn(
-        model_path=output_path / f"saved_models" / f"model_final.pth",
-        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
-        device=device,
-    )
+        vol_mod_obj, _ = create_volumetric_model_from_saved_model_attn(
+            model_path=output_path / f"saved_models" / f"model_final.pth",
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
+            device=device,
+        )
 
-    refine_edited_relu_field(
-        vol_mod_edit=vol_mod_edit,
-        vol_mod_object=vol_mod_obj,
-        vol_mod_ref=pretrained_vol_mod,
-        vol_mod_output=sds_vol_mod,
-        train_dataset=train_dataset,
-        output_dir=output_path,
-        prompt=config.prompt,
-        edit_idx=config.edit_idx,
-        object_idx=config.object_idx,
-        timestamp=config.timestamp,
-        ray_batch_size=config.ray_batch_size,
-        num_stages=config.num_stages,
-        num_iterations_per_stage=config.num_iterations_refine,
-        scale_factor=config.scale_factor,
-        learning_rate=config.learning_rate,
-        save_freq=config.save_frequency,
-        feedback_freq=config.feedback_frequency,
-        summary_freq=config.summary_frequency,
-        apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,
-        num_workers=config.num_workers,
-        verbose_rendering=config.verbose_rendering,
-        directional_dataset=config.directional_dataset,
-        attn_tv_weight=config.attn_tv_weight,
-        kval=config.kval,
-    )
+        refine_edited_relu_field(
+            vol_mod_edit=vol_mod_edit,
+            vol_mod_object=vol_mod_obj,
+            vol_mod_ref=pretrained_vol_mod,
+            vol_mod_output=sds_vol_mod,
+            train_dataset=train_dataset,
+            output_dir=output_path,
+            prompt=config.prompt,
+            edit_idx=config.edit_idx,
+            object_idx=config.object_idx,
+            timestamp=config.timestamp,
+            ray_batch_size=config.ray_batch_size,
+            num_stages=config.num_stages,
+            num_iterations_per_stage=config.num_iterations_refine,
+            scale_factor=config.scale_factor,
+            learning_rate=config.learning_rate,
+            save_freq=config.save_frequency,
+            feedback_freq=config.feedback_frequency,
+            summary_freq=config.summary_frequency,
+            apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,
+            num_workers=config.num_workers,
+            verbose_rendering=config.verbose_rendering,
+            directional_dataset=config.directional_dataset,
+            attn_tv_weight=config.attn_tv_weight,
+            kval=config.kval,
+        )
 
 if __name__ == "__main__":
     main()

@@ -24,7 +24,7 @@ train_default() {
 	-i logs/rf/${2}/${1}/ref/saved_models/model_final.pth \
 	-p "$3" \
 	-eidx=${5} \
-	--num_iterations_edit=1000 \
+	--num_iterations_edit=8000 \
 	--directional_dataset=True \
 	--density_correlation_weight=50 \
 	--tv_density_weight=50.0 \
