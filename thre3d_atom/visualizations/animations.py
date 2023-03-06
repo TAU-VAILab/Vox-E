@@ -204,7 +204,7 @@ def render_camera_path_for_volumetric_model_attn_blend(
         cmp = cm.get_cmap('jet')
         #cmp = shift_cmap(cmp, 0.5)
         norm = colors.Normalize(vmin=np.min(attn_frame), vmax=np.max(attn_frame))
-        attn_frame = (cmp(norm(attn_frame))[:, :, :3]).numpy()
+        attn_frame = (cmp(norm(attn_frame))[:, :, :3])
         #attn_frame_save = (0.5 * attn_frame) + (0.5 * rendered_output.colour.numpy())
         attn_frame = to8b(attn_frame)
         attn_frame_save = to8b(attn_frame_save)
