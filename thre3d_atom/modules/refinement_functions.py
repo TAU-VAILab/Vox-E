@@ -213,9 +213,19 @@ def build_graph(features, densities, edit_attn, obj_attn, K = 0.05, sigma = 0.1)
     best_voxels_edit_mask = probs[..., 0] >= 0.992 * top_prob_edit
     top_k_best_edit_idxs = best_voxels_edit_mask.nonzero().squeeze()
 
+    obj_mask = probs[..., 1] > probs[..., 0]
+    idxs = torch.arange(probs.size(0))
+    obj_idxs = idxs[obj_mask.cpu()]
+    perm = torch.randperm(obj_idxs.size(0))
+    idx = perm[:5000]
+    top_k_best_obj_idxs = obj_idxs[idx]
+
     if best_voxels_edit_mask.sum() < 300:
-        edit_topk = torch.topk(edit_attn_vals.squeeze(), 250)
+        edit_topk = torch.topk(edit_attn_vals.squeeze(), 300)
         top_k_best_edit_idxs = edit_topk.indices
+
+        obj_topk = torch.topk(obj_attn_vals.squeeze(), 200)
+        top_k_best_obj_idxs = obj_topk.indices
 
     # TODO (ES): delete this commented code later - for now keep it for debugging
     #top_prob_obj = torch.max(probs[..., 1])
@@ -247,12 +257,7 @@ def build_graph(features, densities, edit_attn, obj_attn, K = 0.05, sigma = 0.1)
     #obj_topk = torch.topk(probs[..., 1], num_best_obj)
     #top_k_best_obj_idxs = obj_topk.indices
 
-    obj_mask = probs[..., 1] > probs[..., 0]
-    idxs = torch.arange(probs.size(0))
-    obj_idxs = idxs[obj_mask.cpu()]
-    perm = torch.randperm(obj_idxs.size(0))
-    idx = perm[:12000]
-    top_k_best_obj_idxs = obj_idxs[idx]
+    
 
 
     # set inter node edges
