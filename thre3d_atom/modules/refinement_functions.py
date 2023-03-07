@@ -177,7 +177,7 @@ def gen_id(t_in, x, y):
     return id.item()
 
 
-def build_graph(features, densities, edit_attn, obj_attn, K = 0.05, sigma = 0.2):
+def build_graph(features, densities, edit_attn, obj_attn, K = 0.05, sigma = 0.1):
     g = maxflow.Graph[float]()
     m = torch.nn.MaxPool3d(3, stride=1, padding=1)
 
@@ -212,6 +212,10 @@ def build_graph(features, densities, edit_attn, obj_attn, K = 0.05, sigma = 0.2)
     top_prob_edit = torch.max(probs[..., 0])
     best_voxels_edit_mask = probs[..., 0] >= 0.992 * top_prob_edit
     top_k_best_edit_idxs = best_voxels_edit_mask.nonzero().squeeze()
+
+    if best_voxels_edit_mask.sum() < 300:
+        edit_topk = torch.topk(edit_attn_vals.squeeze(), 250)
+        top_k_best_edit_idxs = edit_topk.indices
 
     # TODO (ES): delete this commented code later - for now keep it for debugging
     #top_prob_obj = torch.max(probs[..., 1])
