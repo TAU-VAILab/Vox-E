@@ -33,6 +33,7 @@ class SHVoxGridRenderConfig:
     camera_bounds: CameraBounds
     perturb_sampled_points: bool = True
     optimized_sampling: bool = False
+    linear_disparity_sampling: bool = False
 
     # AccumulationConfig
     density2occupancy: Callable[[Tensor, Tensor], Tensor] = density2occupancy_pb

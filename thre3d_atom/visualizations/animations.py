@@ -142,7 +142,9 @@ def render_camera_path_for_volumetric_model_attn_blend(
         camera_path: Sequence[CameraPose],
         camera_intrinsics: CameraIntrinsics,
         render_scale_factor: Optional[float] = None,
-        overridden_num_samples_per_ray: Optional[int] = None
+        overridden_num_samples_per_ray: Optional[int] = None,
+        image_save_freq: Optional[int] = None,
+        image_save_path: Optional[str] = None,
 ) -> np.array:
     if render_scale_factor is not None:
         # Render downsampled images for speed if requested
@@ -179,14 +181,10 @@ def render_camera_path_for_volumetric_model_attn_blend(
         acc_frame = rendered_output.extra[EXTRA_ACCUMULATED_WEIGHTS].numpy()
 
         attn_frame = rendered_attn.attn.squeeze(-1).cpu().numpy()
-        #attn_frame = 1-attn_frame
-
 
         # apply post-processing to the depth frame
         colour_frame = to8b(colour_frame)
         depth_frame = postprocess_depth_map(depth_frame, acc_map=acc_frame)
-        # tile the acc_frame to have 3 channels
-        # also invert it for a better visualization
 
         def shift_cmap(cmap, frac):
             """Shifts a colormap by a certain fraction.
@@ -206,13 +204,25 @@ def render_camera_path_for_volumetric_model_attn_blend(
         cmp = cm.get_cmap('jet')
         #cmp = shift_cmap(cmp, 0.5)
         norm = colors.Normalize(vmin=np.min(attn_frame), vmax=np.max(attn_frame))
-        attn_frame = cmp(norm(attn_frame))[:, :, :3]
-        attn_frame_save = (0.5 * attn_frame) + (0.5 * rendered_output.colour.numpy())
+        attn_frame = (cmp(norm(attn_frame))[:, :, :3])
+        #attn_frame_save = (0.5 * attn_frame) + (0.5 * rendered_output.colour.numpy())
         attn_frame = to8b(attn_frame)
-        attn_frame_save = to8b(attn_frame_save)
         frame = np.concatenate([colour_frame, depth_frame, attn_frame], axis=1)
         rendered_frames.append(frame)
-        attn_frames.append(attn_frame_save)
+        attn_frames.append(attn_frame)
+
+        # save image if necessary (used for plots and stuff)
+        if image_save_freq != None:
+            if frame_num % image_save_freq == 0:
+                imageio.imwrite(
+                image_save_path / f"color_{frame_num}.png",
+                colour_frame,
+                 )
+                
+                imageio.imwrite(
+                image_save_path / f"attn_{frame_num}.png",
+                attn_frame,
+                 )
 
 
     return np.stack(rendered_frames), attn_frames

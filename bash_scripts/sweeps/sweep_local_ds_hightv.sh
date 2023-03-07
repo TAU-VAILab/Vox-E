@@ -26,12 +26,12 @@ train_default() {
 	--directional_dataset=True \
 	--density_correlation_weight=50 \
 	--sds_t_start=4500 \
-	--sds_t_gamma=0.75 \
+	--sds_t_gamma=0.72 \
 	--sds_t_freq=600 \
 	--num_iterations_per_stage=8000 \
 	--tv_density_weight=50.0 \
-	--tv_features_weight=300.0 \
-	--learning_rate=0.022 \
+	--tv_features_weight=250.0 \
+	--learning_rate=0.023 \
 	--sh_degree=0 # we currently only support diffuse
 
 	# Rendering Output Video:
@@ -167,33 +167,82 @@ train_default() {
 #prompt="a render of a kangaroo wearing big sunglasses"
 #log_name="sunglasses"
 #
+##train_default $scene $sweep_name "$prompt" $log_name
+##
+#
+#sweep_name=sweep_local_ds_hightv
+#scene=gingercat
+#prompt="a render of a cat wearing a wizard's hat"
+#log_name="wizard"
+#
 #train_default $scene $sweep_name "$prompt" $log_name
 #
+#sweep_name=sweep_local_ds_hightv
+#scene=kangaroo
+#prompt="a render of a kangaroo wearing a wizard's hat"
+#log_name="wizard"
+#
+#train_default $scene $sweep_name "$prompt" $log_name
+#
+#sweep_name=sweep_local_ds_hightv
+#scene=dog2
+#prompt="a render of a dog wearing a wizard's hat"
+#log_name="wizard"
+#
+#train_default $scene $sweep_name "$prompt" $log_name
+
+#sweep_name=sweep_local_ds_hightv
+#scene=dog2
+#prompt="a render of a dog wearing big sunglasses"
+#log_name="sunglasses5"
+#
+#train_default $scene $sweep_name "$prompt" $log_name
+
+#sweep_name=sweep_local_ds_hightv
+#scene=gingercat
+#prompt="a render of a cat in an astronaut suit"
+#log_name="astronaut"
+#
+#train_default $scene $sweep_name "$prompt" $log_name
+
+#sweep_name=sweep_local_ds_hightv
+#scene=dog2
+#prompt="a render of a tactical K9 unit dog wearing a black vest"
+#log_name="tactical"
+#
+#train_default $scene $sweep_name "$prompt" $log_name
 
 sweep_name=sweep_local_ds_hightv
-scene=gingercat
-prompt="a render of a cat wearing a wizard's hat"
-log_name="wizard"
+scene=dog2
+prompt="a render of a dog in an astronaut suit"
+log_name="astronaut"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
 sweep_name=sweep_local_ds_hightv
 scene=kangaroo
-prompt="a render of a kangaroo wearing a wizard's hat"
-log_name="wizard"
+prompt="a render of a kangaroo in an astronaut suit"
+log_name="astronaut"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
 sweep_name=sweep_local_ds_hightv
 scene=dog2
-prompt="a render of a dog wearing a wizard's hat"
-log_name="wizard"
+prompt="a render of a dog wearing a birthday hat"
+log_name="birthday"
 
 train_default $scene $sweep_name "$prompt" $log_name
 
 sweep_name=sweep_local_ds_hightv
-scene=dog2
-prompt="a render of a dog wearing big sunglasses"
-log_name="sunglasses5"
+scene=gingercat
+prompt="a render of a cat wearing a birthday hat"
+log_name="birthday"
+
+train_default $scene $sweep_name "$prompt" $log_name
+
+sweep_name=sweep_local_ds_hightv
+scene=kangaroo
+prompt="a render of a kangaroo wearing a birthday hat"
+log_name="birthday"
 
 train_default $scene $sweep_name "$prompt" $log_name
