@@ -415,11 +415,13 @@ def refine_model(
             # get optimized keep mask
             if (global_step % refine_freq == 0) or (global_step == 1):
                 get_edit_region(vol_mod_edit=vol_mod_edit, 
-                                vol_mod_object=vol_mod_object,
-                                vol_mod_output=vol_mod_sds,
-                                rays=rays_batch,
-                                step=global_step,
-                                K=K)
+                        vol_mod_object=vol_mod_object,
+                        vol_mod_output=vol_mod_sds,
+                        rays=rays_batch,
+                        img_height=im_h, 
+                        img_width=im_w,
+                        step=global_step,
+                        K=K)
 
                 # change densities and features without optimization:
                 regular_density = vol_mod_ref.thre3d_repr._densities.detach()

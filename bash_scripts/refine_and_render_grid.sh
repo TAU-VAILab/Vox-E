@@ -40,10 +40,9 @@ train_and_render_attn_grid() {
 # STARTING RUN:
 
 scene=dog2
-prompt="a render of a dog wearing a christmas sweater"
-log_name="christmas2" # 1-word description of the prompt for saving
+prompt="a render of a dog wearing big sunglasses"
+log_name="sunglasses" # 1-word description of the prompt for saving
 edit_idx=8
-object_idx=5
 timestamp=200
 k=5.0
 

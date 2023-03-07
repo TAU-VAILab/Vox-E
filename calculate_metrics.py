@@ -3,6 +3,7 @@ import pandas as pd
 import click
 import torch
 import os
+import pytorch_fid.fid_score as fid
 from easydict import EasyDict
 from torch.backends import cudnn
 from pathlib import Path
@@ -13,7 +14,6 @@ cudnn.benchmark = True
 # Also set torch's multiprocessing start method to spawn
 # refer -> https://github.com/pytorch/pytorch/issues/40403
 # for more information. Some stupid PyTorch stuff to take care of
-torch.multiprocessing.set_start_method("spawn")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -61,6 +61,7 @@ def main(**kwargs) -> None:
         prompts = []
         out_to_text_sims = []
         directional_sims = []
+        fid_scores = []
         
         # iterate over prompt dirs
         for prompt_dir_name in os.listdir(scene_dir):
@@ -70,6 +71,12 @@ def main(**kwargs) -> None:
             prompts.append(prompt_dir_name)
             prompt_dir = os.path.join(scene_dir, prompt_dir_name)
             clip_out_text_features = get_text_features(prompt_dir)
+            fid_score = fid.calculate_fid_given_paths((prompt_dir, ref_path),
+                                                   50,
+                                                   device,
+                                                   2048,
+                                                   1)
+            fid_scores.append(fid_score)
             output_imgs = get_images(prompt_dir)
             clip_out_img_features = get_CLIP_im_features(output_imgs)
 
@@ -85,8 +92,9 @@ def main(**kwargs) -> None:
             directional_sims.append(directional_similarity)
         
         # set up dataframe
-        metrics_dict = {'out img to prompt similarity': out_to_text_sims,
-                        'directional similarity': directional_sims}
+        metrics_dict = {'text CLIP': out_to_text_sims,
+                        'dir CLIP': directional_sims,
+                        'FID': fid_scores}
         df = pd.DataFrame(data=metrics_dict, index=prompts)
         frame_titles.append(scene_dir_name)
         dataframes.append(df)
@@ -140,10 +148,12 @@ def get_text_features(prompt_path: Path) -> str:
     return text_features
     
     
-def get_images(ref_path: Path) -> tuple:
+def get_images(im_dir: Path) -> tuple:
     ims = []
-    for name in img_names_to_get:
-        im_path = os.path.join(ref_path, name)
+    for name in os.listdir(im_dir):
+        if name.endswith('.txt'):
+            continue
+        im_path = os.path.join(im_dir, name)
         img = Image.open(im_path)
         ims.append(img)
     return ims
