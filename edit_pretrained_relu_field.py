@@ -189,6 +189,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
 @click.option("--num_iterations_refine", type=click.INT, required=False, default=1500,
               help="number of training iterations performed in the refinement stage", show_default=True)
+@click.option("--uncoupled_mode", type=click.BOOL, required=False, default=False,
+              help="removes relu field coupling and learns in image space",
+               show_default=True)
 
 # fmt: on
 # -------------------------------------------------------------------------------------
@@ -272,6 +275,7 @@ def main(**kwargs) -> None:
         sds_t_freq=config.sds_t_freq,
         sds_t_start=config.sds_t_start,
         sds_t_gamma=config.sds_t_gamma,
+        uncoupled_mode=config.uncoupled_mode,
     )
     
     if config.do_refinement == True:

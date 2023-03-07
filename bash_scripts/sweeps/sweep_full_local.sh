@@ -47,29 +47,29 @@ train_default() {
 
 # christmas sweater
 
-sweep_name=sweep_full_local
-scene=gingercat
-prompt="a render of a cat wearing a christmas sweater"
-log_name="christmas"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local
-scene=dog2
-prompt="a render of a dog wearing a christmas sweater"
-log_name="christmas"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local
-scene=kangaroo
-prompt="a render of a kangaroo wearing a christmas sweater"
-log_name="christmas"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
+#sweep_name=sweep_full_local
+#scene=gingercat
+#prompt="a render of a cat wearing a christmas sweater"
+#log_name="christmas"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_local
+#scene=dog2
+#prompt="a render of a dog wearing a christmas sweater"
+#log_name="christmas"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_local
+#scene=kangaroo
+#prompt="a render of a kangaroo wearing a christmas sweater"
+#log_name="christmas"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 # sunglasses
 
@@ -119,6 +119,30 @@ sweep_name=sweep_full_local
 scene=kangaroo
 prompt="a render of a kangaroo wearing a birthday hat"
 log_name="birthday"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_local
+scene=frog2
+prompt="a render of a frog wearing a birthday hat"
+log_name="birthday"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_local
+scene=frog2
+prompt="a render of a frog wearing a big sunglasses"
+log_name="sunglasses"
+eidx=8
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_local
+scene=frog2
+prompt="a render of a frog wearing a christmas sweater"
+log_name="christmas"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
