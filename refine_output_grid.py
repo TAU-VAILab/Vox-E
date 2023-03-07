@@ -244,8 +244,6 @@ def main(**kwargs) -> None:
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         fast_debug_mode=config.fast_debug_mode,
-        refine_freq=config.refine_freq,
-        refine_iters=config.refine_iters,
         K=config.kval,
     )
 
