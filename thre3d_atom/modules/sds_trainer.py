@@ -98,6 +98,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     sds_t_freq: int = 200,
     sds_t_start: int = 1500,
     sds_t_gamma: float = 1.0,
+    uncoupled_mode: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -341,7 +342,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
                 # sample a subset of rays and pixels synchronously
                 batch_size_in_images = int(ray_batch_size / (im_h * im_w))
-                rays_batch, _, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
+                rays_batch, pixels_batch, index_batch, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
                         unflattened_rays, images, indices, batch_size_in_images
                     )
 
@@ -370,16 +371,20 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                                                                  logvars=logvars_batch)
                 current_sds_max_step = sds_loss.get_current_max_step_ratio()
 
-            ### insert losses that tie them together here ###
-            density_correlation_loss, cov_grid = _density_correlation_loss(sds_density=sds_density,
-                                                                 regular_density=regular_density)
-            total_loss = total_loss + density_correlation_loss * density_correlation_weight
+            if uncoupled_mode:
+                specular_loss = l1_loss(specular_rendered_pixels_batch_sds, pixels_batch)
+                total_loss = total_loss + specular_loss * density_correlation_weight
+            else:
+                ### insert losses that tie them together here ###
+                density_correlation_loss, cov_grid = _density_correlation_loss(sds_density=sds_density,
+                                                                     regular_density=regular_density)
+                total_loss = total_loss + density_correlation_loss * density_correlation_weight
 
-            if feature_correlation_weight > 0.0:
-                feature_correlation_loss = _feature_correlation_loss(sds_features=sds_features,
-                                                                 regular_features=regular_features,
-                                                                 density_cov_grid=cov_grid)
-                total_loss = total_loss + feature_correlation_loss * feature_correlation_weight
+                if feature_correlation_weight > 0.0:
+                    feature_correlation_loss = _feature_correlation_loss(sds_features=sds_features,
+                                                                     regular_features=regular_features,
+                                                                     density_cov_grid=cov_grid)
+                    total_loss = total_loss + feature_correlation_loss * feature_correlation_weight
 
             ### insert other losses here ###
             if tv_density_weight > 0 and global_step % 1 == 0:
@@ -406,9 +411,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 wandb.log({"tv_features_loss" : tv_features_loss.item()}, step=global_step)
             if do_sds:
                 wandb.log({"current_sds_max_step" : current_sds_max_step}, step=global_step)
-            if feature_correlation_weight > 0:
-                wandb.log({"feature_correlation_loss" : feature_correlation_loss.item()}, step=global_step)
-            wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
+            if not uncoupled_mode:
+                if feature_correlation_weight > 0:
+                    wandb.log({"feature_correlation_loss" : feature_correlation_loss.item()}, step=global_step)
+                wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
+            else:
+                wandb.log({"specular_loss" : specular_loss.item()}, step=global_step)
             wandb.log({"total_loss" : total_loss}, step=global_step)
             wandb.log({"first selected indx in batch" : index_batch[0]}, step=global_step)
             lrs = [param_group["lr"] for param_group in optimizer.param_groups]
