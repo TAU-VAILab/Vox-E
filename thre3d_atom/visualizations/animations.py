@@ -27,6 +27,7 @@ def render_camera_path_for_volumetric_model(
     overridden_num_samples_per_ray: Optional[int] = None,
     image_save_freq: Optional[int] = None,
     image_save_path: Optional[str] = None,
+    output_only: bool = True,
 ) -> np.array:
     if render_scale_factor is not None:
         # Render downsampled images for speed if requested
@@ -52,17 +53,21 @@ def render_camera_path_for_volumetric_model(
             **overridden_config_dict,
         )
         colour_frame = rendered_output.colour.numpy()
-        depth_frame = rendered_output.depth.numpy()
-        acc_frame = rendered_output.extra[EXTRA_ACCUMULATED_WEIGHTS].numpy()
 
         # apply post-processing to the depth frame
         colour_frame = to8b(colour_frame)
-        depth_frame = postprocess_depth_map(depth_frame, acc_map=acc_frame)
-        # tile the acc_frame to have 3 channels
-        # also invert it for a better visualization
-        acc_frame = to8b(1.0 - np.tile(acc_frame, (1, 1, NUM_COLOUR_CHANNELS)))
 
-        frame = np.concatenate([colour_frame, depth_frame, acc_frame], axis=1)
+        if not output_only:
+            depth_frame = rendered_output.depth.numpy()
+            acc_frame = rendered_output.extra[EXTRA_ACCUMULATED_WEIGHTS].numpy()
+            depth_frame = postprocess_depth_map(depth_frame, acc_map=acc_frame)
+            # tile the acc_frame to have 3 channels
+            # also invert it for a better visualization
+            acc_frame = to8b(1.0 - np.tile(acc_frame, (1, 1, NUM_COLOUR_CHANNELS)))
+            frame = np.concatenate([colour_frame, depth_frame, acc_frame], axis=1)
+        else:
+            frame = colour_frame
+            
         rendered_frames.append(frame)
 
         # save image if necessary (used for plots and stuff)
@@ -145,6 +150,7 @@ def render_camera_path_for_volumetric_model_attn_blend(
         overridden_num_samples_per_ray: Optional[int] = None,
         image_save_freq: Optional[int] = None,
         image_save_path: Optional[str] = None,
+        output_only: bool = True,
 ) -> np.array:
     if render_scale_factor is not None:
         # Render downsampled images for speed if requested
@@ -177,13 +183,13 @@ def render_camera_path_for_volumetric_model_attn_blend(
             **overridden_config_dict,
         )
         colour_frame = rendered_output.colour.numpy()
-        depth_frame = rendered_output.depth.numpy()
-        acc_frame = rendered_output.extra[EXTRA_ACCUMULATED_WEIGHTS].numpy()
-
         attn_frame = rendered_attn.attn.squeeze(-1).cpu().numpy()
 
         # apply post-processing to the depth frame
         colour_frame = to8b(colour_frame)
+
+        depth_frame = rendered_output.depth.numpy()
+        acc_frame = rendered_output.extra[EXTRA_ACCUMULATED_WEIGHTS].numpy()
         depth_frame = postprocess_depth_map(depth_frame, acc_map=acc_frame)
 
         def shift_cmap(cmap, frac):
@@ -207,7 +213,12 @@ def render_camera_path_for_volumetric_model_attn_blend(
         attn_frame = (cmp(norm(attn_frame))[:, :, :3])
         #attn_frame_save = (0.5 * attn_frame) + (0.5 * rendered_output.colour.numpy())
         attn_frame = to8b(attn_frame)
-        frame = np.concatenate([colour_frame, depth_frame, attn_frame], axis=1)
+
+        if output_only:
+            frame = colour_frame
+        else:
+            frame = np.concatenate([colour_frame, depth_frame, attn_frame], axis=1)
+            
         rendered_frames.append(frame)
         attn_frames.append(attn_frame)
 
