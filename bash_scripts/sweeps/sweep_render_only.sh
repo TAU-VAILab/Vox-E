@@ -18,13 +18,13 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 # Rendering function template:
 train_and_render() {
 	# Rendering Output Video:
-
-	echo "Starting Rendering..."
-	python render_sh_based_voxel_grid_attn.py \
-	-i /storage/etaisella/repos/SDSReluFields/logs/rf/sweep_full_local/dog2/christmas/saved_models/model_final_refined.pth \
-	--ref_path=/storage/etaisella/repos/SDSReluFields/logs/rf/sweep_full_local_norefine/dog2/ref/saved_models/model_final.pth \
-	-o /storage/etaisella/output_renders/christmas_dog/ \
-	--save_freq=10
+	#echo "Starting Rendering..."
+	#python render_sh_based_voxel_grid.py \
+	#-i /home/etaisella/voxelArt/SDSReluFields/logs/rf/sweep_160/dog2/ref/saved_models/model_final.pth \
+	#--ref_path=/home/etaisella/voxelArt/SDSReluFields/logs/rf/sweep_160/dog2/ref/saved_models/model_final.pth \
+	#-o output_renders/supp_results/dog2/ref/ \
+	#--sds_prompt="$2" \
+	#--save_freq=1
 
 	python render_sh_based_voxel_grid.py \
 	-i /home/etaisella/voxelArt/SDSReluFields/logs/rf/gingercat/ref/saved_models/gingercat_ref.pth \
