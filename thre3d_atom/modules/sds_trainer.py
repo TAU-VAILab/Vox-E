@@ -99,6 +99,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     sds_t_start: int = 1500,
     sds_t_gamma: float = 1.0,
     uncoupled_mode: bool = False,
+    uncoupled_l2_mode: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -372,7 +373,10 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 current_sds_max_step = sds_loss.get_current_max_step_ratio()
 
             if uncoupled_mode:
-                specular_loss = l1_loss(specular_rendered_pixels_batch_sds, pixels_batch)
+                if uncoupled_l2_mode:
+                    specular_loss = mse_loss(specular_rendered_pixels_batch_sds, pixels_batch)
+                else:
+                    specular_loss = l1_loss(specular_rendered_pixels_batch_sds, pixels_batch)
                 total_loss = total_loss + specular_loss * density_correlation_weight
             else:
                 ### insert losses that tie them together here ###
