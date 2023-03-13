@@ -40,13 +40,22 @@ train_and_render_attn_grid() {
 	# Rendering Output Video:
 	echo "Starting Rendering..."
 	python render_sh_based_voxel_grid_attn.py \
+<<<<<<< Updated upstream
 	-i /home/etaisella/voxelArt/logs/rf/refine_try_kangaroo2/saved_models/model_final_refined.pth \
 	-o output_renders/kangaroo2/refined/ \
+=======
+	-i /storage/etaisella/logs/rf/refine_try_frog_crown/saved_models/model_final_refined.pth \
+	-o output_renders/frog_crown/refined/ \
+>>>>>>> Stashed changes
 	--save_freq=10 
 }
 # STARTING RUN:
 
+<<<<<<< Updated upstream
 scene=dog2
+=======
+scene=frog2
+>>>>>>> Stashed changes
 prompt="a render of a dog wearing big sunglasses"
 log_name="sunglasses" # 1-word description of the prompt for saving
 edit_idx=8

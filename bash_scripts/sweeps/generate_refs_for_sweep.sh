@@ -21,7 +21,7 @@ train_default() {
 	echo "Starting Training..."
 	python train_sh_based_voxel_grid_with_posed_images.py -d ../data/${1}/ \
 	-o logs/rf/${2}/${1}/ref \
-	--sh_degree=0 \
+	--sh_degree=2 \
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
@@ -49,11 +49,5 @@ train_default $scene $sweep_name "$prompt"
 sweep_name=$sweep_name_in
 scene=kangaroo
 prompt="a render of a kangaroo"
-
-train_default $scene $sweep_name "$prompt"
-
-sweep_name=$sweep_name_in
-scene=taxi
-prompt="a render of a car"
 
 train_default $scene $sweep_name "$prompt"
