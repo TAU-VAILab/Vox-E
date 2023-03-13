@@ -44,9 +44,9 @@ train_and_render() {
 # STARTING RUN:
 
 scene=gingercat
-prompt="a render of a claymation figure of a cat"
+prompt="a render of a dog with a party hat"
 directional=True
-log_name="claymation" # 1-word description of the prompt for saving
+log_name="ref" # 1-word description of the prompt for saving
 dcl_weight=200.0
 sds_t_decay_start=4000
 sds_t_gamma=0.75
