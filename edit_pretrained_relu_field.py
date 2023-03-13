@@ -192,6 +192,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--uncoupled_mode", type=click.BOOL, required=False, default=False,
               help="removes relu field coupling and learns in image space",
                show_default=True)
+@click.option("--uncoupled_l2_mode", type=click.BOOL, required=False, default=False,
+              help="removes relu field coupling and learns in image space",
+               show_default=True)
 
 # fmt: on
 # -------------------------------------------------------------------------------------
@@ -276,6 +279,7 @@ def main(**kwargs) -> None:
         sds_t_start=config.sds_t_start,
         sds_t_gamma=config.sds_t_gamma,
         uncoupled_mode=config.uncoupled_mode,
+        uncoupled_l2_mode=config.uncoupled_l2_mode,
     )
     
     if config.do_refinement == True:

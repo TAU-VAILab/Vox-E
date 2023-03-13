@@ -18,12 +18,27 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 # Rendering function template:
 train_and_render() {
 	# Rendering Output Video:
-	echo "Starting Rendering..."
+	#echo "Starting Rendering..."
+	#python render_sh_based_voxel_grid.py \
+	#-i /home/etaisella/voxelArt/SDSReluFields/logs/rf/sweep_160/dog2/ref/saved_models/model_final.pth \
+	#--ref_path=/home/etaisella/voxelArt/SDSReluFields/logs/rf/sweep_160/dog2/ref/saved_models/model_final.pth \
+	#-o output_renders/supp_results/dog2/ref/ \
+	#--sds_prompt="$2" \
+	#--save_freq=1
+
 	python render_sh_based_voxel_grid.py \
-	-i logs/rf/${1}_sds_dir_${3}_dcl_${5}_${4}_sds_t_${6}_${7}_${8}/saved_models/model_final.pth \
-	-o output_renders/${9}/${1}/${4} \
+	-i /home/etaisella/voxelArt/SDSReluFields/logs/rf/gingercat/ref/saved_models/gingercat_ref.pth \
+	--ref_path=/home/etaisella/voxelArt/SDSReluFields/logs/rf/sweep_160_tv/gingercat/ref/saved_models/model_final.pth \
+	-o output_renders/supp_results/gingercat/ref/ \
 	--sds_prompt="$2" \
-	--save_freq=10
+	--save_freq=1
+
+	#python render_sh_based_voxel_grid.py \
+	#-i /home/etaisella/voxelArt/SDSReluFields/logs/rf/sweep_160/kangaroo/ref/saved_models/model_final.pth \
+	#--ref_path=/home/etaisella/voxelArt/SDSReluFields/logs/rf/sweep_160/kangaroo/ref/saved_models/model_final.pth \
+	#-o output_renders/supp_results/kangaroo/ref/ \
+	#--sds_prompt="$2" \
+	#--save_freq=1
 }
 
 # STARTING RUN:
