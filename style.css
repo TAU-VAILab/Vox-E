@@ -55,12 +55,12 @@ li {
 
 .prompt_title {
     font-family: "Indie Flower", Arial;
-    font-size: 26px;
+    font-size: 1.8vw;
 }
 
 .prompt_title_local {
     font-family: "Indie Flower", Arial;
-    font-size: 26px;
+    font-size: 1.8vw;
 	color: green;
 	font-weight: bold;
 	text-decoration: underline;
@@ -68,12 +68,12 @@ li {
 
 .video-label {
     font-family: "Noto Sans", Arial;
-    font-size: 20px;
+    font-size: 1.8vw;
 }
 
 .video-label-slides {
     font-family: "Noto Sans", Arial;
-    font-size: 20px;
+    font-size: 1.6vw;
     margin-bottom: 20px;
 }
 
