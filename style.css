@@ -1,0 +1,200 @@
+body {
+    font-family: 'Noto Sans', sans-serif;
+  }
+
+h1 {
+    font-family: "Noto Sans", Arial;
+    font-size: 52px;
+    color: rgb(95, 95, 95);
+    letter-spacing: -1px;
+    word-spacing: 8px;
+	line-height: 0px;
+	margin-top: 60px;
+    font-weight: bold;
+}
+
+h2 {
+    font-family: "Noto Sans", Arial;
+    font-size: 35px;
+    margin-top: 30px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: rgb(0, 0, 0);
+}
+
+h3 {
+    font-family: "Noto Sans", Arial;
+    font-size: 20px;
+    transform: rotate(270deg);
+    position: relative;
+    left: 100;
+}
+
+h4 {
+    font-family: "Indie Flower", Arial;
+    font-size: 18px;
+    transform: rotate(270deg);
+    position: relative;
+    left: 100;
+}
+
+h5 {
+    font-family: "Noto Sans", Arial;
+    font-size: 20px;
+}
+
+p {
+    font-family: "Noto Sans", Arial;
+    font-size: 16px;
+}
+
+li {
+    font-family: "Noto Sans", Arial;
+    font-size: 16px;
+}
+
+.prompt_title {
+    font-family: "Indie Flower", Arial;
+    font-size: 26px;
+}
+
+.prompt_title_local {
+    font-family: "Indie Flower", Arial;
+    font-size: 26px;
+	color: green;
+	font-weight: bold;
+	text-decoration: underline;
+}
+
+.video-label {
+    font-family: "Noto Sans", Arial;
+    font-size: 20px;
+}
+
+.video-label-slides {
+    font-family: "Noto Sans", Arial;
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+.author-block {
+    font-size: 18px;
+}
+
+.author-block a {
+    color: hsl(204, 86%, 53%);
+    text-decoration: none;
+ }
+
+.author-block a:hover {
+    text-decoration: underline;
+}
+
+.affiliations {
+    margin-top: 8px;
+}
+
+.publication-links{
+    margin-top: 10px;
+}
+
+.link-block a {
+    text-decoration: none;
+    font-size: 22px;
+    color: rgb(0, 0, 0);
+}
+
+.link-block {
+    text-decoration: none;
+    font-size: 22px;
+    color: rgb(0, 0, 0);
+}
+
+.button {
+    padding: 16px 14px;
+    background-color: white;
+    border-radius: 24px;
+    font-size: 16px;
+    color: rgb(0, 0, 0);
+    border: 2px solid rgb(135, 134, 134);
+}
+
+.button:hover {
+    border: 2px solid rgb(0, 0, 0);
+}
+
+.page-container {
+    width: 100%;
+    height: 100vh
+}
+
+.swiper {
+    width: 30%;
+    margin-top: 30px;
+}
+
+.swiper-wrapper {
+    height: 75%;
+}
+
+.swiper-slide img {
+    width: 100%;
+}
+
+.swiper-slide video {
+    width: 100%;
+}
+
+.intro-paragraph {
+    width: 100%;
+}
+
+.intro-paragraph p {
+    width: 100%;
+    font-size: 20px;
+}
+
+.intro-container {
+    width: 55%;
+    margin: 0 auto;
+    margin-bottom: 30px;
+}
+
+.abstract-container {
+    width: 55%;
+    margin: 0 auto;
+    margin-bottom: 30px;
+}
+
+.abstract-container p {
+    font-size: 18px;
+}
+
+.method-container {
+    width: 55%;
+    margin: 0 auto;
+    margin-bottom: 30px;
+}
+
+.ack-container {
+    width: 55%;
+    margin: 0 auto;
+    margin-bottom: 30px;
+}
+
+.bib-container {
+    width: 55%;
+    margin: 0 auto;
+    margin-bottom: 30px;
+}
+
+.code-container {
+    width: 100%;
+    background-color: rgb(240, 240, 240);
+}
+
+.bib-container code {
+    color: black;
+    font-size: 16px;
+    background-color: rgb(240, 240, 240);
+}
