@@ -39,30 +39,9 @@ scene=unpainted_cat
 prompt="a render of a cat"
 
 train_default $scene $sweep_name "$prompt"
-<<<<<<< HEAD
-#
-#sweep_name=$sweep_name_in
-#scene=gingercat
-#prompt="a render of a cat"
-#
-#train_default $scene $sweep_name "$prompt"
-#
-#sweep_name=$sweep_name_in
-#scene=kangaroo
-#prompt="a render of a kangaroo"
-#
-#train_default $scene $sweep_name "$prompt"
-#
-#sweep_name=$sweep_name_in
-#scene=taxi
-#prompt="a render of a car"
-#
-#train_default $scene $sweep_name "$prompt"
-=======
 
 sweep_name=$sweep_name_in
 scene=kangaroo
 prompt="a render of a kangaroo"
 
 train_default $scene $sweep_name "$prompt"
->>>>>>> 09ac6a435d938162bcec89404e027d018ffc6af9
