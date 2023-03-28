@@ -35,25 +35,25 @@ train_default() {
 # STARTING RUN:
 
 sweep_name=$sweep_name_in
-scene=dog2
-prompt="a render of a dog"
-
-train_default $scene $sweep_name "$prompt"
-
-sweep_name=$sweep_name_in
-scene=gingercat
+scene=unpainted_cat
 prompt="a render of a cat"
 
 train_default $scene $sweep_name "$prompt"
-
-sweep_name=$sweep_name_in
-scene=kangaroo
-prompt="a render of a kangaroo"
-
-train_default $scene $sweep_name "$prompt"
-
-sweep_name=$sweep_name_in
-scene=taxi
-prompt="a render of a car"
-
-train_default $scene $sweep_name "$prompt"
+#
+#sweep_name=$sweep_name_in
+#scene=gingercat
+#prompt="a render of a cat"
+#
+#train_default $scene $sweep_name "$prompt"
+#
+#sweep_name=$sweep_name_in
+#scene=kangaroo
+#prompt="a render of a kangaroo"
+#
+#train_default $scene $sweep_name "$prompt"
+#
+#sweep_name=$sweep_name_in
+#scene=taxi
+#prompt="a render of a car"
+#
+#train_default $scene $sweep_name "$prompt"
