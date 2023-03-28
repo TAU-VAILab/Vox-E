@@ -26,18 +26,18 @@ train_default() {
 	-eidx=${5} \
 	--num_iterations_edit=8000 \
 	--directional_dataset=True \
-	--density_correlation_weight=200 \
-	--tv_density_weight=20.0 \
-	--tv_features_weight=100.0 \
-	--learning_rate=0.027 \
-	--do_refinement=True \
-	--sds_t_start=3400 \
-	--sh_degree=0 # we currently only support diffuse
+	--density_correlation_weight=150 \
+	--tv_density_weight=50.0 \
+	--tv_features_weight=150.0 \
+	--learning_rate=0.028 \
+	--do_refinement=False \
+	--sds_t_start=4000 \
+	--sh_degree=1 # we currently only support diffuse
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
-	python render_sh_based_voxel_grid_attn.py \
-	-i logs/rf/${2}/${1}/${4}/saved_models/model_final_refined.pth \
+	python render_sh_based_voxel_grid.py \
+	-i logs/rf/${2}/${1}/${4}/saved_models/model_final.pth \
 	-o output_renders/${2}/${1}/${4}/ \
 	--ref_path=logs/rf/${2}/${1}/ref/saved_models/model_final.pth \
 	--sds_prompt="$3" \
@@ -46,34 +46,28 @@ train_default() {
 
 # STARTING RUN:
 
-#sweep_name=sweep_full_local
-#scene=taxi
-#prompt="a render of a yellow car with a huge rear spoiler"
-#log_name="spoiler"
-#eidx=8
-#
-#train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local
-scene=alien
-prompt="a render of an alien wearing a tuxedo"
-log_name="tuxedo_2"
+sweep_name=sweep_shdeg1
+scene=dog2
+prompt="a render of a yarn doll of a light grey dog"
+log_name="yarn"
 eidx=8
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_local
-scene=alien
-prompt="a render of an alien wearing a christmas sweater"
-log_name="christmas2"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local
-scene=alien
-prompt="a render of an alien wearing big sunglasses"
-log_name="sunglasses2"
+sweep_name=sweep_shdeg1
+scene=gingercat
+prompt="a render of a yarn doll of a ginger cat"
+log_name="yarn"
 eidx=8
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_shdeg1
+scene=kangaroo
+prompt="a render of a yarn doll of a kangaroo"
+log_name="yarn"
+eidx=8
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+

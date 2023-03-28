@@ -26,18 +26,18 @@ train_default() {
 	-eidx=${5} \
 	--num_iterations_edit=8000 \
 	--directional_dataset=True \
-	--density_correlation_weight=5000 \
+	--density_correlation_weight=150 \
 	--tv_density_weight=50.0 \
-	--tv_features_weight=100.0 \
-	--learning_rate=0.025 \
-	--do_refinement=False \
-	--uncoupled_mode=True \
-	--sh_degree=0 # we currently only support diffuse
+	--tv_features_weight=150.0 \
+	--learning_rate=0.028 \
+	--do_refinement=True \
+	--sds_t_start=4000 \
+	--sh_degree=1 # we currently only support diffuse
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
-	python render_sh_based_voxel_grid.py \
-	-i logs/rf/${2}/${1}/${4}/saved_models/model_final.pth \
+	python render_sh_based_voxel_grid_attn.py \
+	-i logs/rf/${2}/${1}/${4}/saved_models/model_final_refined.pth \
 	-o output_renders/${2}/${1}/${4}/ \
 	--ref_path=logs/rf/${2}/${1}/ref/saved_models/model_final.pth \
 	--sds_prompt="$3" \
@@ -46,17 +46,7 @@ train_default() {
 
 # STARTING RUN:
 
-# christmas sweater
-
-sweep_name=sweep_full_local_norefine_uncoupled
-scene=gingercat
-prompt="a render of a cat wearing a christmas sweater"
-log_name="christmas"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local_norefine_uncoupled
+sweep_name=sweep_shdeg1
 scene=dog2
 prompt="a render of a dog wearing a christmas sweater"
 log_name="christmas"
@@ -64,7 +54,15 @@ eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_local_norefine_uncoupled
+sweep_name=sweep_shdeg1
+scene=gingercat
+prompt="a render of a cat wearing a christmas sweater"
+log_name="christmas"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_shdeg1
 scene=kangaroo
 prompt="a render of a kangaroo wearing a christmas sweater"
 log_name="christmas"
@@ -72,9 +70,15 @@ eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-# sunglasses
+sweep_name=sweep_shdeg1
+scene=dog2
+prompt="a render of a dog wearing big sunglasses"
+log_name="sunglasses"
+eidx=8
 
-sweep_name=sweep_full_local_norefine_uncoupled
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_shdeg1
 scene=gingercat
 prompt="a render of a cat wearing big sunglasses"
 log_name="sunglasses"
@@ -82,7 +86,7 @@ eidx=8
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_local_norefine_uncoupled
+sweep_name=sweep_shdeg1
 scene=kangaroo
 prompt="a render of a kangaroo wearing big sunglasses"
 log_name="sunglasses"
@@ -90,25 +94,7 @@ eidx=8
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_local_norefine_uncoupled
-scene=dog2
-prompt="a render of a dog wearing a big sunglasses"
-log_name="sunglasses"
-eidx=8
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-# birthday hat
-
-sweep_name=sweep_full_local_norefine_uncoupled
-scene=gingercat
-prompt="a render of a cat wearing a birthday hat"
-log_name="birthday"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local_norefine_uncoupled
+sweep_name=sweep_shdeg1
 scene=dog2
 prompt="a render of a dog wearing a birthday hat"
 log_name="birthday"
@@ -116,7 +102,15 @@ eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_local_norefine_uncoupled
+sweep_name=sweep_shdeg1
+scene=gingercat
+prompt="a render of a cat wearing a birthday hat"
+log_name="birthday"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_shdeg1
 scene=kangaroo
 prompt="a render of a kangaroo wearing a birthday hat"
 log_name="birthday"
@@ -124,28 +118,27 @@ eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-# frog!
-
-sweep_name=sweep_full_local_norefine_uncoupled
-scene=frog2
-prompt="a render of a frog wearing a birthday hat"
-log_name="birthday"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local_norefine_uncoupled
-scene=frog2
-prompt="a render of a frog wearing a big sunglasses"
-log_name="sunglasses"
-eidx=8
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local_norefine_uncoupled
-scene=frog2
-prompt="a render of a frog wearing a christmas sweater"
-log_name="christmas"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
+#sweep_name=sweep_full_local
+#scene=alien
+#prompt="a render of an alien wearing a tuxedo"
+#log_name="tuxedo_2"
+#eidx=8
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_local
+#scene=alien
+#prompt="a render of an alien wearing a christmas sweater"
+#log_name="christmas2"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_local
+#scene=alien
+#prompt="a render of an alien wearing big sunglasses"
+#log_name="sunglasses2"
+#eidx=8
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#

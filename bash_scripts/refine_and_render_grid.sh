@@ -42,6 +42,7 @@ train_and_render_attn_grid() {
 	python render_sh_based_voxel_grid_attn.py \
 	-i /home/etaisella/voxelArt/logs/rf/refine_try_kangaroo2/saved_models/model_final_refined.pth \
 	-o output_renders/kangaroo2/refined/ \
+
 	--save_freq=10 
 }
 # STARTING RUN:
