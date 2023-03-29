@@ -91,7 +91,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="whether to use softplus_field or relu_field", show_default=True)
 
 # Rendering related arguments:
-@click.option("--render_num_samples_per_ray", type=click.INT, required=False, default=1024,
+@click.option("--render_num_samples_per_ray", type=click.INT, required=False, default=512,
               help="number of samples taken per ray during rendering", show_default=True)
 @click.option("--parallel_rays_chunk_size", type=click.INT, required=False, default=32768,
               help="number of parallel rays processed on the GPU for accelerated rendering", show_default=True)
@@ -110,7 +110,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of training iterations performed in the editing (SDS) stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.025,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.03,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_freq", type=click.INT, required=False, default=400,
               help="frequency in which to reduce learning rate", show_default=True)
@@ -126,13 +126,21 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--num_workers", type=click.INT, required=False, default=4,
               help="number of worker processes used for loading the data using the dataloader"
                    "note that this will be ignored if GPU-caching of the data is successful :)", show_default=True)
+@click.option("--log_wandb", type=click.BOOL, required=False, default=True,
+              help="whether to use white background for training with synthetic (background-less) scenes :)",
+              show_default=True) 
+@click.option("--wandb_username", type=click.STRING, required=False, default="etaisella", 
+              help="wandb user name used for logging", show_default=True)
+@click.option("--wandb_project_name", type=click.STRING, required=False, default="Vox-E",
+              help="sds prompt used for SDS based loss", show_default=True)
+
 
 # Various frequencies:
-@click.option("--save_frequency", type=click.INT, required=False, default=250,
+@click.option("--save_frequency", type=click.INT, required=False, default=500,
               help="number of iterations after which a model is saved", show_default=True)
-@click.option("--test_frequency", type=click.INT, required=False, default=250,
+@click.option("--test_frequency", type=click.INT, required=False, default=500,
               help="number of iterations after which test metrics are computed", show_default=True)
-@click.option("--feedback_frequency", type=click.INT, required=False, default=100,
+@click.option("--feedback_frequency", type=click.INT, required=False, default=200,
               help="number of iterations after which rendered feedback is generated", show_default=True)
 @click.option("--summary_frequency", type=click.INT, required=False, default=50,
               help="number of iterations after which training-loss/other-summaries are logged", show_default=True)
@@ -148,9 +156,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # sds specific stuff
 @click.option("--directional_dataset", type=click.BOOL, required=False, default=True,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
-               show_default=True)
-@click.option("--use_uncertainty", type=click.BOOL, required=False, default=False,
-              help="whether to use an uncertainty aware type loss",
                show_default=True)
 @click.option("--do_sds", type=click.BOOL, required=False, default=True,
               help="whether to use an uncertainty aware type loss",
@@ -199,12 +204,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
-    # load the requested configuration for the training
+    # load the requested configuration for the training:
     config = EasyDict(kwargs)
 
-    wandb.init(project='VoxelArtReluFields v1.1', entity="etaisella",
-               config=dict(config), name="test " + str(datetime.now()),
-               id=wandb.util.generate_id())
+    # set wandb login info if required:
+    if config.log_wandb:
+        wandb.init(project=config.wandb_project_name, entity=config.wandb_username,
+                   config=dict(config), name="test " + str(datetime.now()),
+                   id=wandb.util.generate_id())
+        
     # parse os-checked path-strings into Pathlike Paths :)
     data_path = Path(config.data_path)
     model_path = Path(config.ref_model_path)
@@ -265,10 +273,8 @@ def main(**kwargs) -> None:
         apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
-        fast_debug_mode=config.fast_debug_mode,
         sds_prompt=config.prompt,
         directional_dataset=config.directional_dataset,
-        use_uncertainty=config.use_uncertainty,
         new_frame_frequency=config.new_frame_frequency,
         density_correlation_weight=config.density_correlation_weight,
         feature_correlation_weight=config.feature_correlation_weight,

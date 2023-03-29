@@ -20,15 +20,9 @@ train_default() {
 	# Train:
 	echo "Starting Training..."
 	python train_sh_based_voxel_grid_with_posed_images.py -d ../data/${1}/ \
-	-o logs/rf/${1}_ref_shdeg_${2}/ \
-	--sh_degree=0 \
-	--lpips_weight=${3}
-
-	# Rendering Output Video:
-	echo "Starting Rendering..."
-	python render_sh_based_voxel_grid.py \
-	-i logs/rf/${1}_ref_shdeg_${2}/saved_models/model_final.pth \
-	-o output_renders/${1}_ref_shdeg_${2}
+	-o logs/rf/${1}/ref/ \
+	--fast_debug_mode=True \
+	--sh_degree=0
 }
 
 # STARTING RUN:

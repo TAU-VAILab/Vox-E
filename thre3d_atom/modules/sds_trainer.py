@@ -58,9 +58,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     # required arguments:
     output_dir: Path,
     # optional arguments:)
-    random_initializer: Callable[[Tensor], Tensor] = partial(
-        torch.nn.init.uniform_, a=-1.0, b=1.0
-    ),
     test_dataset: Optional[PosedImagesDataset] = None,
     image_batch_cache_size: int = 8,
     ray_batch_size: int = 32768,
@@ -84,14 +81,11 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     # miscellaneous options can be left untouched
     num_workers: int = 4,
     verbose_rendering: bool = True,
-    fast_debug_mode: bool = False,
     sds_prompt: str = "none",
     directional_dataset: bool = False,
-    use_uncertainty: bool = False,
     new_frame_frequency: int = 1,
     density_correlation_weight: float = 0.0,
     feature_correlation_weight: float = 0.0,
-    unet3d_mode: bool = False,
     tv_density_weight: float = 0.0,
     tv_features_weight: float = 0.0,
     do_sds: bool = True,
@@ -146,13 +140,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     ), f"sorry, you have to supply a text prompt to use SDS"
 
     # get regular density for dcl
-    if unet3d_mode:
-        regular_density, regular_features = pretrained_vol_mod.thre3d_repr.get_densities_and_features()
-        regular_density = regular_density.detach()
-        regular_features = regular_features.detach()
-    else:
-        regular_density = pretrained_vol_mod.thre3d_repr._densities.detach()
-        regular_features = pretrained_vol_mod.thre3d_repr._features.detach()
+    regular_density = pretrained_vol_mod.thre3d_repr._densities.detach()
+    regular_features = pretrained_vol_mod.thre3d_repr._features.detach()
 
     # init sds loss class
     sds_loss = scoreDistillationLoss(sds_vol_mod.device, 
@@ -235,19 +224,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
     # setup tensorboard writer
     tensorboard_writer = SummaryWriter(str(tensorboard_dir))
-
-    # create camera-rays visualization:
-    if not fast_debug_mode:
-        log.info(
-            "creating a camera-rays visualization... please wait... "
-            "this is a slow operation :D"
-        )
-        visualize_camera_rays(
-            train_dataset,
-            output_dir,
-            num_rays_per_image=1,
-        )
-
+    
     # start actual training
     log.info("beginning training")
     time_spent_actually_training = 0
@@ -269,12 +246,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
         params=[{"params": sds_vol_mod.thre3d_repr.parameters(), "lr": current_stage_lr}]
                     
-        ## add logvars to optimizeable parameters if required
-        if use_uncertainty:
-            num_poses = len(train_dataset)
-            logvars = torch.nn.Parameter(torch.zeros(num_poses, device=sds_vol_mod.device))
-            params.append({{"params": logvars, "lr": current_stage_lr}})
-    
         optimizer = torch.optim.Adam(
             params=params,
             betas=(0.9, 0.999),
@@ -314,11 +285,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             total_loss = 0
             global_step = ((stage - 1) * num_iterations_per_stage) + stage_iteration
 
-            if unet3d_mode:
-                sds_density, sds_features = sds_vol_mod.thre3d_repr.get_densities_and_features()
-            else:
-                sds_density = sds_vol_mod.thre3d_repr._densities
-                sds_features = sds_vol_mod.thre3d_repr._features
+            sds_density = sds_vol_mod.thre3d_repr._densities
+            sds_features = sds_vol_mod.thre3d_repr._features
 
             if global_step % new_frame_frequency == 0 or global_step == 1:
                 images, poses, indices = next(infinite_train_dl)
@@ -348,28 +316,19 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                     )
 
                 # log inputs
-                wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
                 if directional_dataset:
                     direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
-                    wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
 
             # render a small chunk of rays and compute a loss on it
             specular_rendered_batch_sds = sds_vol_mod.render_rays(rays_batch)
             specular_rendered_pixels_batch_sds = specular_rendered_batch_sds.colour
 
             # run sds loss training step!
-            if use_uncertainty:
-                logvars_batch = logvars[index_batch]
-                total_loss = total_loss + torch.mean(logvars_batch)
-            else:
-                logvars_batch = None
-
             if do_sds:
                 total_loss = total_loss + sds_loss.training_step(specular_rendered_pixels_batch_sds,
                                                                  im_h, im_w, 
                                                                  directions=direction_batch,
-                                                                 global_step=global_step, 
-                                                                 logvars=logvars_batch)
+                                                                 global_step=global_step)
                 current_sds_max_step = sds_loss.get_current_max_step_ratio()
 
             if uncoupled_mode:
@@ -407,8 +366,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             optimizer.zero_grad()
 
             # wandb logging:
-            if use_uncertainty:
-                _log_variances_in_wandb(logvars, global_step)
+            wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
+            if directional_dataset:
+                wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
             if tv_density_weight > 0:
                 wandb.log({"tv_density_loss" : tv_density_loss.item()}, step=global_step)
             if tv_features_weight > 0:
