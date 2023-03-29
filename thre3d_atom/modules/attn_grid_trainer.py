@@ -44,7 +44,7 @@ from thre3d_atom.visualizations.static import (
 )
 
 from thre3d_atom.modules.refinement_functions import (
-    visualize_and_log_attention_maps, 
+    visualize_and_log_attention_maps,
     calc_loss_on_attn_grid,
     get_edit_region,
     log_and_vis_render_diff
@@ -52,6 +52,7 @@ from thre3d_atom.modules.refinement_functions import (
 
 dir_to_num_dict = {'side': 0, 'overhead': 1, 'back': 2, 'front': 3}
 mse_loss = torch.nn.MSELoss(reduction='none')
+
 
 # TrainProcedure = Callable[[VolumetricModel, Dataset, ...], VolumetricModel]
 
@@ -62,6 +63,7 @@ def refine_edited_relu_field(
         vol_mod_output: VolumetricModel,
         vol_mod_ref: VolumetricModel,
         train_dataset: PosedImagesDataset,
+        hf_auth_token: str,
         # required arguments:
         output_dir: Path,
         prompt: str,
@@ -91,7 +93,12 @@ def refine_edited_relu_field(
         verbose_rendering: bool = True,
         directional_dataset: bool = False,
         attn_tv_weight: float = 0.001,
-        kval: float = 5.0
+        kval: float = 5.0,
+        edit_mask_thresh: float = 0.992,
+        num_obj_voxels_thresh: int = 5000,
+        min_num_edit_voxels: int = 300,
+        top_k_edit_thresh: int = 300,
+        top_k_obj_thresh: int = 200
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -142,7 +149,7 @@ def refine_edited_relu_field(
     ), f"sorry, you have to supply a text prompt to use SDS"
 
     # init sds loss class
-    sd_model = StableDiffusion(vol_mod_edit.device, "1.4")
+    sd_model = StableDiffusion(vol_mod_edit.device, "1.4", auth_token=hf_auth_token)
     direction_batch = None
     selected_idx_in_batch = [0]
 
@@ -243,7 +250,7 @@ def refine_edited_relu_field(
         lr_scheduler_edit = torch.optim.lr_scheduler.ExponentialLR(
             optimizer_edit, gamma=lr_decay_gamma_per_stage
         )
-        
+
         # set optimizer object
         params_object = [{"params": vol_mod_object.thre3d_repr.attn, "lr": current_stage_lr}]
 
@@ -319,7 +326,7 @@ def refine_edited_relu_field(
             # log inputs
             if directional_dataset:
                 direction_batch = get_dir_batch_from_poses(poses[selected_idx_in_batch])
-                wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}  , step=global_step)
+                wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
 
             # Get attention Maps
             out_imgs = rendered_output.colour.unsqueeze(0)
@@ -332,7 +339,7 @@ def refine_edited_relu_field(
                 indices_to_fetch = list(range(1, edit_idx + 1))
             else:
                 indices_to_fetch = [edit_idx, object_idx]
-                
+
             gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
                                           indices_to_fetch=indices_to_fetch)
             visualize_and_log_attention_maps(gt, global_step)
@@ -355,27 +362,26 @@ def refine_edited_relu_field(
             object_attn_rendered_batch = object_attn_rendered_batch.attn
 
             # calc losses
-            edit_attn_loss = calc_loss_on_attn_grid(attn_render=edit_attn_rendered_batch, 
-                                                    attn_map=edit_attn_map, 
-                                                    token="edit", 
+            edit_attn_loss = calc_loss_on_attn_grid(attn_render=edit_attn_rendered_batch,
+                                                    attn_map=edit_attn_map,
+                                                    token="edit",
                                                     global_step=global_step)
-            
-            object_attn_loss = calc_loss_on_attn_grid(attn_render=object_attn_rendered_batch, 
-                                                      attn_map=object_attn_map, 
-                                                      token="object", 
+
+            object_attn_loss = calc_loss_on_attn_grid(attn_render=object_attn_rendered_batch,
+                                                      attn_map=object_attn_map,
+                                                      token="object",
                                                       global_step=global_step)
-            
+
             edit_attn_render = edit_attn_rendered_batch.reshape(edit_attn_map.shape)
             object_attn_render = object_attn_rendered_batch.reshape(edit_attn_map.shape)
             log_and_vis_render_diff(edit_attn_render, object_attn_render, global_step)
-            
 
             total_loss_edit = total_loss_edit + edit_attn_loss
-            tv_loss_edit =_tv_loss_on_grid(vol_mod_edit.thre3d_repr.attn)
+            tv_loss_edit = _tv_loss_on_grid(vol_mod_edit.thre3d_repr.attn)
             total_loss_edit = total_loss_edit + tv_loss_edit * attn_tv_weight
 
             total_loss_object = total_loss_object + object_attn_loss
-            tv_loss_object =_tv_loss_on_grid(vol_mod_object.thre3d_repr.attn)
+            tv_loss_object = _tv_loss_on_grid(vol_mod_object.thre3d_repr.attn)
             total_loss_object = total_loss_object + tv_loss_object * attn_tv_weight
 
             # optimization steps:
@@ -509,14 +515,16 @@ def refine_edited_relu_field(
         # -------------------------------------------------------------------------------------
 
         log.info(f"Starting Grid Refinement!")
-        get_edit_region(vol_mod_edit=vol_mod_edit, 
+        get_edit_region(vol_mod_edit=vol_mod_edit,
                         vol_mod_object=vol_mod_object,
                         vol_mod_output=vol_mod_output,
                         rays=rays_batch,
-                        img_height=im_h, 
+                        img_height=im_h,
                         img_width=im_w,
                         step=global_step,
-                        K=kval)
+                        K=kval, edit_mask_thresh=edit_mask_thresh,
+                        num_obj_voxels_thresh=num_obj_voxels_thresh, min_num_edit_voxels=min_num_edit_voxels,
+                        top_k_edit_thresh=top_k_edit_thresh, top_k_obj_thresh=top_k_obj_thresh)
 
         # change densities and features without optimization:
         regular_density = vol_mod_ref.thre3d_repr._densities.detach()
@@ -532,20 +540,21 @@ def refine_edited_relu_field(
         vol_mod_output.thre3d_repr._features = torch.nn.Parameter(new_features)
 
         visualize_sh_vox_grid_vol_mod_rendered_feedback(
-                    vol_mod=vol_mod_output,
-                    vol_mod_name="sds_refined",
-                    render_feedback_pose=render_feedback_pose,
-                    camera_intrinsics=camera_intrinsics,
-                    global_step=0,
-                    feedback_logs_dir=render_dir,
-                    parallel_rays_chunk_size=vol_mod_output.render_config.parallel_rays_chunk_size,
-                    training_time=time_spent_actually_training,
-                    log_diffuse_rendered_version=apply_diffuse_render_regularization,
-                    use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
-                    overridden_num_samples_per_ray=vol_mod_output.render_config.render_num_samples_per_ray,
-                    verbose_rendering=verbose_rendering,
-                    log_wandb=True,
-                )
+            vol_mod=vol_mod_output,
+            vol_mod_name="sds_refined",
+            render_feedback_pose=render_feedback_pose,
+            camera_intrinsics=camera_intrinsics,
+            global_step=0,
+            feedback_logs_dir=render_dir,
+            parallel_rays_chunk_size=vol_mod_output.render_config.parallel_rays_chunk_size,
+            training_time=time_spent_actually_training,
+            log_diffuse_rendered_version=apply_diffuse_render_regularization,
+            use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+            overridden_num_samples_per_ray=vol_mod_output.render_config.render_num_samples_per_ray,
+            verbose_rendering=verbose_rendering,
+            log_wandb=True,
+        )
+        vol_mod_output.thre3d_repr.attn = None
 
         # -------------------------------------------------------------------------------------
 
@@ -591,7 +600,7 @@ def refine_edited_relu_field(
                 "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
             }
         ),
-        model_dir / f"model_final_refined.pth",
+        model_dir / f"model_final.pth",
     )
 
     # training complete yay! :)
@@ -625,6 +634,7 @@ def _make_dataloader_from_dataset(
         persistent_workers=not dataset.cached_data_mode and num_workers > 0,
     )
 
+
 def get_dir_batch_from_poses(poses: Tensor):
     dir_batch = []
     num_poses = poses.shape[0]
@@ -653,6 +663,7 @@ def _pitch_yaw_from_Rt(rotation: Tensor):
     pitch = np.arctan(tz / tr) * 180 / np.pi
     yaw = np.arccos(rotation[0, 0].cpu().numpy()) * 180.0 / np.pi
     return pitch, yaw
+
 
 def _tv_loss_on_grid(grid: Tensor):
     tv0 = grid.diff(dim=0).abs()

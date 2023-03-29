@@ -46,7 +46,7 @@ class StableDiffusion(nn.Module):
                  hf_key=None,
                  t_sched_start = 1500,
                  t_sched_freq = 500,
-                 t_sched_gamma = 1.0,):
+                 t_sched_gamma = 1.0, auth_token=None):
         super().__init__()
 
         self.device = device
@@ -69,7 +69,7 @@ class StableDiffusion(nn.Module):
             model_key = "runwayml/stable-diffusion-v1-5"
         elif self.sd_version == '1.4':
             model_key = "CompVis/stable-diffusion-v1-4"
-            use_auth_token = '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'
+            use_auth_token = auth_token
         else:
             raise ValueError(f'Stable-diffusion version {self.sd_version} not supported.')
 
