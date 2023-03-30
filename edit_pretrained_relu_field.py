@@ -110,7 +110,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of training iterations performed in the editing (SDS) stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.03,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.028,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_freq", type=click.INT, required=False, default=400,
               help="frequency in which to reduce learning rate", show_default=True)
@@ -267,7 +267,6 @@ def main(**kwargs) -> None:
         lr_freq=config.lr_freq,
         lr_gamma=config.lr_gamma,
         save_freq=config.save_frequency,
-        test_freq=config.test_frequency,
         feedback_freq=config.feedback_frequency,
         summary_freq=config.summary_frequency,
         apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,

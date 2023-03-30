@@ -334,7 +334,6 @@ def refine_edited_relu_field(
                 
             gt, t = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
                                           indices_to_fetch=indices_to_fetch)
-            visualize_and_log_attention_maps(gt, global_step)
 
             if object_idx == None:
                 edit_attn_map = gt.pop(edit_idx - 1)
@@ -389,6 +388,7 @@ def refine_edited_relu_field(
             # wandb logging:
             if log_wandb:
                 # Get attention Maps
+                visualize_and_log_attention_maps(gt, global_step)
                 wandb.log({"Input Image": wandb.Image(rendered_output.colour.numpy())}, step=global_step)
                 wandb.log({"attn_loss_edit": edit_attn_loss}, step=global_step)
                 wandb.log({"tv_loss_edit": tv_loss_edit}, step=global_step)

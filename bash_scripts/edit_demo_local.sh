@@ -37,7 +37,7 @@ train_default() {
 
 scene=dog2
 prompt="a render of a dog with a birthday hat over a white background"
-log_name="birthday_hat"
+log_name="birthday_hat_nowandb"
 eidx=9
 oidx=5
 
