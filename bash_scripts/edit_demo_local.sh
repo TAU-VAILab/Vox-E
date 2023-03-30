@@ -23,6 +23,7 @@ train_default() {
 	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-p "$2" \
 	-eidx ${4} \
+	-oidx ${5} \
 	--do_refinement=True
 
 	# Rendering Output Video:
@@ -35,8 +36,9 @@ train_default() {
 # STARTING RUN:
 
 scene=dog2
-prompt="a render of a dog with a birthday hat"
+prompt="a render of a dog with a birthday hat over a white background"
 log_name="birthday_hat"
 eidx=9
+oidx=5
 
-train_default $scene "$prompt" $log_name $eidx
+train_default $scene "$prompt" $log_name $eidx $oidx

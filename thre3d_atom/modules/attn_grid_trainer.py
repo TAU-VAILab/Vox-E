@@ -91,7 +91,8 @@ def refine_edited_relu_field(
         verbose_rendering: bool = True,
         directional_dataset: bool = False,
         attn_tv_weight: float = 0.001,
-        kval: float = 5.0
+        kval: float = 5.0,
+        log_wandb: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -319,13 +320,11 @@ def refine_edited_relu_field(
             # log inputs
             if directional_dataset:
                 direction_batch = get_dir_batch_from_poses(poses[selected_idx_in_batch])
-                wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}  , step=global_step)
 
             # Get attention Maps
             out_imgs = rendered_output.colour.unsqueeze(0)
             out_imgs = out_imgs.permute((0, 3, 1, 2)).to(vol_mod_edit.device)
             m_prompt = prompt + f", {direction_batch[0]} view"
-            wandb.log({"Input Image": wandb.Image(rendered_output.colour.numpy())}, step=global_step)
 
             # if no object idx is given (default) take the maximum between all non-edit tokens
             if object_idx == None:
@@ -388,15 +387,18 @@ def refine_edited_relu_field(
             optimizer_object.zero_grad()
 
             # wandb logging:
-            wandb.log({"attn_loss_edit": edit_attn_loss}, step=global_step)
-            wandb.log({"tv_loss_edit": tv_loss_edit}, step=global_step)
-            wandb.log({"total_loss_edit": total_loss_edit}, step=global_step)
-
-            wandb.log({"attn_loss_object": object_attn_loss}, step=global_step)
-            wandb.log({"tv_loss_object": tv_loss_object}, step=global_step)
-            wandb.log({"total_loss_object": total_loss_object}, step=global_step)
-
-            wandb.log({"first selected indx in batch": index_batch[0]}, step=global_step)
+            if log_wandb:
+                # Get attention Maps
+                wandb.log({"Input Image": wandb.Image(rendered_output.colour.numpy())}, step=global_step)
+                wandb.log({"attn_loss_edit": edit_attn_loss}, step=global_step)
+                wandb.log({"tv_loss_edit": tv_loss_edit}, step=global_step)
+                wandb.log({"total_loss_edit": total_loss_edit}, step=global_step)
+                wandb.log({"attn_loss_object": object_attn_loss}, step=global_step)
+                wandb.log({"tv_loss_object": tv_loss_object}, step=global_step)
+                wandb.log({"total_loss_object": total_loss_object}, step=global_step)
+                wandb.log({"first selected indx in batch": index_batch[0]}, step=global_step)
+                if directional_dataset:
+                    wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}  , step=global_step)
 
             # ---------------------------------------------------------------------------------
 
@@ -469,7 +471,7 @@ def refine_edited_relu_field(
                         use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
                         overridden_num_samples_per_ray=vol_mod_edit.render_config.render_num_samples_per_ray,
                         verbose_rendering=verbose_rendering,
-                        log_wandb=True,
+                        log_wandb=log_wandb,
                     )
 
             # save the model
@@ -544,7 +546,7 @@ def refine_edited_relu_field(
                     use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
                     overridden_num_samples_per_ray=vol_mod_output.render_config.render_num_samples_per_ray,
                     verbose_rendering=verbose_rendering,
-                    log_wandb=True,
+                    log_wandb=log_wandb,
                 )
 
         # -------------------------------------------------------------------------------------

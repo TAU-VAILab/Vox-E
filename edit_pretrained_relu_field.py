@@ -286,6 +286,7 @@ def main(**kwargs) -> None:
         sds_t_gamma=config.sds_t_gamma,
         uncoupled_mode=config.uncoupled_mode,
         uncoupled_l2_mode=config.uncoupled_l2_mode,
+        log_wandb=config.log_wandb,
     )
     
     if config.do_refinement == True:
@@ -326,6 +327,7 @@ def main(**kwargs) -> None:
             directional_dataset=config.directional_dataset,
             attn_tv_weight=config.attn_tv_weight,
             kval=config.kval,
+            log_wandb=config.log_wandb,
         )
 
 if __name__ == "__main__":

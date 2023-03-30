@@ -1,7 +1,7 @@
 # SDSReluFields
 
 ## Concept:
-![Graph](https://i.ibb.co/HNqVp4D/Voxel-Art-diagrams-nerf-edit.png "Flow:")
+![Graph](https://tau-vailab.github.io/Vox-E/images/overview_official.png "Flow:")
 
 ## Getting the Repo:
     git clone https://github.com/etaisella/voxelArtReluFields.git

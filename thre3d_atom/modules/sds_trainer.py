@@ -73,7 +73,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     render_feedback_pose: Optional[CameraPose] = None,
     # various training-loop frequencies
     save_freq: int = 1000,
-    test_freq: int = 1000,
     feedback_freq: int = 100,
     summary_freq: int = 10,
     # regularization option:
@@ -94,6 +93,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     sds_t_gamma: float = 1.0,
     uncoupled_mode: bool = False,
     uncoupled_l2_mode: bool = False,
+    log_wandb: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -183,11 +183,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
     train_dl = _make_dataloader_from_dataset(
         train_dataset, image_batch_cache_size, num_workers
-    )
-    test_dl = (
-        _make_dataloader_from_dataset(test_dataset, 1, num_workers)
-        if test_dataset is not None
-        else None
     )
 
     # dataset size aka number of total pixels
@@ -366,26 +361,26 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             optimizer.zero_grad()
 
             # wandb logging:
-            wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
-            if directional_dataset:
-                wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
-            if tv_density_weight > 0:
-                wandb.log({"tv_density_loss" : tv_density_loss.item()}, step=global_step)
-            if tv_features_weight > 0:
-                wandb.log({"tv_features_loss" : tv_features_loss.item()}, step=global_step)
-            if do_sds:
-                wandb.log({"current_sds_max_step" : current_sds_max_step}, step=global_step)
-            if not uncoupled_mode:
-                if feature_correlation_weight > 0:
-                    wandb.log({"feature_correlation_loss" : feature_correlation_loss.item()}, step=global_step)
-                wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
-            else:
-                wandb.log({"specular_loss" : specular_loss.item()}, step=global_step)
-            wandb.log({"total_loss" : total_loss}, step=global_step)
-            wandb.log({"first selected indx in batch" : index_batch[0]}, step=global_step)
-            lrs = [param_group["lr"] for param_group in optimizer.param_groups]
-            wandb.log({"learning rate": lrs[0]}, step=global_step)
-
+            if log_wandb:
+                wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
+                if directional_dataset:
+                    wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
+                if tv_density_weight > 0:
+                    wandb.log({"tv_density_loss" : tv_density_loss.item()}, step=global_step)
+                if tv_features_weight > 0:
+                    wandb.log({"tv_features_loss" : tv_features_loss.item()}, step=global_step)
+                if do_sds:
+                    wandb.log({"current_sds_max_step" : current_sds_max_step}, step=global_step)
+                if not uncoupled_mode:
+                    if feature_correlation_weight > 0:
+                        wandb.log({"feature_correlation_loss" : feature_correlation_loss.item()}, step=global_step)
+                    wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
+                else:
+                    wandb.log({"specular_loss" : specular_loss.item()}, step=global_step)
+                wandb.log({"total_loss" : total_loss}, step=global_step)
+                wandb.log({"first selected indx in batch" : index_batch[0]}, step=global_step)
+                lrs = [param_group["lr"] for param_group in optimizer.param_groups]
+                wandb.log({"learning rate": lrs[0]}, step=global_step)
             # ---------------------------------------------------------------------------------
 
             # rest of the code per iteration is related to saving/logging/feedback/testing
@@ -457,7 +452,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                         use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
                         overridden_num_samples_per_ray=sds_vol_mod.render_config.render_num_samples_per_ray,
                         verbose_rendering=verbose_rendering,
-                        log_wandb=True,
+                        log_wandb=log_wandb,
                     )
 
             # save the model
@@ -539,19 +534,6 @@ def _make_dataloader_from_dataset(
         else 2,
         persistent_workers=not dataset.cached_data_mode and num_workers > 0,
     )
-
-def _log_variances_in_wandb(logvars, global_step):
-    logvars_toplot = logvars.cpu().detach().numpy()
-    variances = np.exp(logvars_toplot)
-    indices = np.arange(variances.shape[0])
-    fig = plt.figure(figsize=(5, 2.5), dpi=300)
-    plt.bar(indices, variances)
-    plt.title(f"Variance per Pose at step {global_step}")
-    plt.xlabel("Pose index")
-    plt.ylabel("Variance")
-    plt.tight_layout()
-    wandb.log({"Variances per Pose": wandb.Image(plt)}, step=global_step)
-    plt.close(fig)
 
 def _density_correlation_loss(sds_density: Tensor,
                               regular_density: Tensor):
