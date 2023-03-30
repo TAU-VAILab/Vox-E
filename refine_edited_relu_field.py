@@ -143,15 +143,25 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--kval", type=click.FLOAT, required=False, default=5.0,
               help="k value used in graphcut", show_default=True)
 
+# wandb stuff
+@click.option("--log_wandb", type=click.BOOL, required=False, default=False,
+              help="whether to use white background for training with synthetic (background-less) scenes :)",
+              show_default=True) 
+@click.option("--wandb_username", type=click.STRING, required=False, default="etaisella", 
+              help="wandb user name used for logging", show_default=True)
+@click.option("--wandb_project_name", type=click.STRING, required=False, default="Vox-E-refine",
+              help="sds prompt used for SDS based loss", show_default=True)
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
     # load the requested configuration for the training
     config = EasyDict(kwargs)
 
-    wandb.init(project='AbracadabraRefinement', entity="etaisella",
-               config=dict(config), name="test " + str(datetime.now()),
-               id=wandb.util.generate_id())
+    if config.log_wandb:
+        wandb.init(project=config.wandb_project_name, entity=config.wandb_username,
+                   config=dict(config), name="test " + str(datetime.now()),
+                   id=wandb.util.generate_id())
     
     # parse os-checked path-strings into Pathlike Paths :)
     data_path = Path(config.data_path)
@@ -179,7 +189,6 @@ def main(**kwargs) -> None:
             downsample_factor=config.data_downsample_factor,
             rgba_white_bkgd=config.white_bkgd,
         )
-        test_dataset = None
 
     pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
         model_path=ref_path,
@@ -234,6 +243,7 @@ def main(**kwargs) -> None:
         directional_dataset=config.directional_dataset,
         attn_tv_weight=config.attn_tv_weight,
         kval=config.kval,
+        config.log_wandb,
     )
 
 

@@ -126,7 +126,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--num_workers", type=click.INT, required=False, default=4,
               help="number of worker processes used for loading the data using the dataloader"
                    "note that this will be ignored if GPU-caching of the data is successful :)", show_default=True)
-@click.option("--log_wandb", type=click.BOOL, required=False, default=True,
+@click.option("--log_wandb", type=click.BOOL, required=False, default=False,
               help="whether to use white background for training with synthetic (background-less) scenes :)",
               show_default=True) 
 @click.option("--wandb_username", type=click.STRING, required=False, default="etaisella", 
