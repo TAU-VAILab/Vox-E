@@ -1,0 +1,498 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <link href='https://fonts.googleapis.com/css?family=Noto Sans' rel='stylesheet'>
+    <link href='https://fonts.googleapis.com/css?family=Indie Flower' rel='stylesheet'>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Vox-E: Text-guided Voxel Editing of 3D Objects</title>
+<!--    <link rel="icon" href="../pics/wis_logo.jpg">-->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans">
+    <link href="./style.css" rel="stylesheet" type="text/css">
+</head>
+<script type="text/javascript">
+    src=hover.js;
+</script>
+<body>
+	<button style="position: fixed;right: 15px;top:  50%;height: 100px;width: 140px; font-size: 20px;" type="button"><a href="#top">Back to top</a></button> 
+<div class="page-container" >
+  <h1 align="center">Vox-E:  Text-guided Voxel Editing of 3D Objects</h1>
+  <h2 align="center">Supplementary Material</h2>
+
+  <p align="center">&nbsp;</p>
+	<h5 align="left">
+    Please click on the sections below to view our interactive results, comparisons and ablations:
+  </h5>
+	<a href="#top"></a>
+  <ul>
+	<li><a href="index.html">Our Results</a></li>
+    <li><a href="results_extreme.html">Our Results on Extreme Edits</a></li>
+	<li><a href="results_real.html">Our Results on Real Scenes</a></li>
+	<li><a href="comparisons.html">Comparisons</a></li>
+	<li><a href="ablations.html">Ablations</a></li>
+	<li><a href="ablations_sh.html">Additional Ablations</a></li>
+  </ul>
+	
+  <!------------------ BEGIN SECTION ------------------>
+
+  <p>&nbsp;</p>
+  <hr>
+	
+  <h2 id="ablations_container" align="left"><a name="image-results" id="image-results"></a>Ablations</h2>
+  <p align="left">We ablate the key components in our framework by comparing a variety of losses against our selected loss term:<br>
+  <ol type="1">
+    <li>Image space L1 loss (col 2)</li>
+	<li>Image space L1 loss with density-guided postprocessing* (col 3)</li>
+    <li>Image space L2 loss (col 4)</li>
+	<li>Image space L2 loss with density-guided postprocessing* (col 5)</li>
+    <li>Volumetric L1 loss (col 6)</li>
+    <li>Volumetric L2 loss (col 7)</li>
+	<li>Our correlation-based volumetric regularization (col 8)</li>
+	<li>Our final result, after refinement (col 9)</li>
+  </ol>
+  <p align="left">* As image-space losses yield high levels of noise, we additionally show results obtained with density-guided postprocessing, which filters voxels with density values below a threshold, according to the initial grid.<br>
+  Note that this does not allow for geometric changes (as evident, for instance, by the removal of the hat in the third row), however, we illustrate this for better visualizing the differences between the different losses.
+  <br />
+  <br>
+
+  <table class="result-table" width="75%" align="center">
+    <tbody>
+            <tr>
+                <th width="5%" >&nbsp;</th>
+                <th width="10%" class="video-label">Input</th>
+                <th width="10%" class="video-label">Image space L1 (IS-L1)</th>
+                <th width="10%" class="video-label">IS-L1 w/ postprocessing</th>
+                <th width="10%" class="video-label">Image space L2 (IS-L2)</th>
+                <th width="10%" class="video-label">IS-L2 w/ postprocessing</th>
+                <th width="10%" class="video-label">Volumetric L1</th>
+                <th width="10%" class="video-label">Volumetric L2</th>
+				<th width="10%" class="video-label">Ours unrefined</th>
+				<th width="10%" class="video-label">Ours refined</th>
+            </tr>
+            <!-- <tr> <td> <p>&nbsp;</p> </td> </tr> -->
+            <!-- loop onmouseover="this.play();" onmouseout="this.pause();" -->
+            <tr>
+                <td align="center">
+                    <h4>A kangaroo wearing a christmas sweater</h4>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\refs\kangaroo_ref.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l1\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l1\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l2\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l2\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l1\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l2\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\unrefined\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\refined\kangaroo_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+            </tr>
+            <tr> <td> <br /> <br /> </td> </tr>
+            <tr>
+                <td align="center">
+                    <h4>A dog wearing big sunglasses</h4>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\refs\dog_ref.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l1\dog_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l1\dog_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l2\sunglasses_dog.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l2\dog_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l1\sunglasses_dog.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l2\sunglasses_dog.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\unrefined\dog_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\refined\dog_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+            </tr>
+            <tr> <td> <br /> <br /> </td> </tr>
+            <tr>
+                <td align="center">
+                    <h4>A cat wearing a birthday party hat</h4>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\refs\cat_ref.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l1\cat_birthday.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l1\hat_cat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l2\cat_birthday.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l2\cat_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l1\hat_cat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l2\hat_cat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\unrefined\cat_birthday.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\synthetic\cat_birthday_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+            </tr>
+     <tr> <td> <br /> <br /> </td> </tr>
+            <tr>
+                <td align="center">
+                    <h4>A kangaroo wearing a birthday party hat</h4>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\refs\kangaroo_ref.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l1\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l1\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l2\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l2\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l1\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l2\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\unrefined\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\refined\kangaroo_hat.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+            </tr>
+             <tr> <td> <br /> <br /> </td> </tr>
+            <tr>
+                <td align="center">
+                    <h4>A dog wearing a christmas sweater</h4>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\refs\dog_ref.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l1\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l1\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l2\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l2\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l1\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l2\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\unrefined\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\refined\dog_sweater.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+            </tr>
+            <tr> <td> <br /> <br /> </td> </tr>
+            <tr>
+                <td align="center">
+                    <h4>A cat wearing big sunglasses</h4>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\refs\cat_ref.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l1\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l1\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\image_l2\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\postprocess_l2\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l1\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+                <td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\volumetric_l2\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\unrefined\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+				<td>
+                    <div class="video-container">
+                        <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                            <source src="results\ablations\refined\cat_glasses.mp4" type="video/mp4">
+                        </video>
+                    </div>
+                </td>
+            </tr>
+    </tbody>
+</table>
+
+<!------------------ END SECTION ------------------>
+	
+  <p><br>
+  </p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+
+</div>
+
+</body></html>
