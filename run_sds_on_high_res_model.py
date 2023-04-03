@@ -226,7 +226,7 @@ def main(**kwargs) -> None:
         test_dataset=test_dataset,
         ray_batch_size=config.ray_batch_size,
         num_stages=config.num_stages,
-        num_iterations_per_stage=config.num_iterations_per_stage,
+        num_iterations=config.num_iterations_per_stage,
         scale_factor=config.scale_factor,
         learning_rate=config.learning_rate,
         lr_decay_start=config.lr_decay_start,

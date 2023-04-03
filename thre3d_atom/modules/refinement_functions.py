@@ -73,13 +73,12 @@ def calc_loss_on_attn_grid(attn_render: Tensor, attn_map: Tensor, token: str,
     return attn_loss
 
 
-def log_and_vis_render_diff(edit_attn_render: Tensor, object_attn_render: Tensor, step: int, log_freq: int=50):
-    if (step % log_freq == 0) or (step == 0):
-        cmp = cm.get_cmap('jet')
-        diff_render = edit_attn_render - object_attn_render
-        norm = colors.Normalize(vmin=diff_render.min(), vmax=torch.max(diff_render).item())
-        diff_frame = cmp(norm(diff_render.cpu().detach().numpy()))[:, :, :3]
-        wandb.log({f"Render Diff": wandb.Image(diff_frame)}, step=step)
+def log_and_vis_render_diff(edit_attn_render: Tensor, object_attn_render: Tensor, step: int):
+    cmp = cm.get_cmap('jet')
+    diff_render = edit_attn_render - object_attn_render
+    norm = colors.Normalize(vmin=diff_render.min(), vmax=torch.max(diff_render).item())
+    diff_frame = cmp(norm(diff_render.cpu().detach().numpy()))[:, :, :3]
+    wandb.log({f"Render Diff": wandb.Image(diff_frame)}, step=step)
 
 
 def plot_scatter(locations: Tensor,

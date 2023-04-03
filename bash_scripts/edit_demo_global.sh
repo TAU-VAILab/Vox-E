@@ -22,23 +22,19 @@ train_default() {
 	-o logs/rf/${1}/${3}/ \
 	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-p "$2" \
-	-eidx ${4} \
-	--log_wandb=True \
-	--do_refinement=True
+	--log_wandb=True
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
-	python render_sh_based_voxel_grid_attn.py \
-	-i logs/rf/${1}/${3}/saved_models/model_final_refined.pth \
+	python render_sh_based_voxel_grid.py \
+	-i logs/rf/${1}/${3}/saved_models/model_final.pth \
 	-o output_renders/${1}/${3}/
 }
 
 # STARTING RUN:
 
 scene=dog2
-prompt="a render of a dog with a party hat"
-log_name="party_hat"
-eidx=9
-oidx=5
+prompt="a render of a yarn doll of a light gray dog"
+log_name="yarn"
 
-train_default $scene "$prompt" $log_name $eidx
+train_default $scene "$prompt" $log_name

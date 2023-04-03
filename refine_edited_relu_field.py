@@ -228,7 +228,7 @@ def main(**kwargs) -> None:
         timestamp=config.timestamp,
         ray_batch_size=config.ray_batch_size,
         num_stages=config.num_stages,
-        num_iterations_per_stage=config.num_iterations_per_stage,
+        num_iterations=config.num_iterations_per_stage,
         scale_factor=config.scale_factor,
         learning_rate=config.learning_rate,
         lr_decay_gamma_per_stage=config.lr_decay_gamma_per_stage,
@@ -243,7 +243,7 @@ def main(**kwargs) -> None:
         directional_dataset=config.directional_dataset,
         attn_tv_weight=config.attn_tv_weight,
         kval=config.kval,
-        config.log_wandb,
+        log_wandb=config.log_wandb,
     )
 
 

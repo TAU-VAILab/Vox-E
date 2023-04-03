@@ -42,15 +42,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.command()
 
 # Required arguments:
-@click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
-              required=True, help="path to the input dataset")
 @click.option("-i", "--ref_model_path", type=click.Path(file_okay=True, dir_okay=False),
               required=True, help="path to the pre-trained relu field model")
 @click.option("-o", "--output_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path for training output")
 @click.option("-p", "--prompt", type=click.STRING, required=True,
               help="sds prompt used for SDS based loss")
-@click.option("-eidx", "--edit_idx", type=click.INT, required=True,
+@click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
+              required=True, help="path to the input dataset")
+@click.option("-eidx", "--edit_idx", type=click.INT, required=False, default=None,
               help="index of edit item, i.e. hat")
 @click.option("-oidx", "--object_idx", type=click.INT, required=False, default=None,
               help="index of object, i.e. cat")
@@ -58,9 +58,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="diffusion_timestamp")
 
 # Input dataset related arguments:
+
 @click.option("--separate_train_test_folders", type=click.BOOL, required=False,
               default=True, help="whether the data directory has separate train and test folders", 
               show_default=True)
+@click.option("--image_dims", type=click.INT, nargs=2, required=False, default=(266, 266),
+              help="dimensions (#pixel width and height) of the rendered images", show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
               default=3.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
@@ -104,13 +107,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of randomly sampled rays used per training iteration", show_default=True)
 @click.option("--train_num_samples_per_ray", type=click.INT, required=False, default=256,
               help="number of samples taken per ray during training", show_default=True)
-@click.option("--num_stages", type=click.INT, required=False, default=1,
-              help="number of progressive growing stages used in training", show_default=True)
 @click.option("--num_iterations_edit", type=click.INT, required=False, default=8000,
               help="number of training iterations performed in the editing (SDS) stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.028,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.03,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_freq", type=click.INT, required=False, default=400,
               help="frequency in which to reduce learning rate", show_default=True)
@@ -154,9 +155,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                    "(skips testing and some lengthy visualizations)", show_default=True)
 
 # sds specific stuff
-@click.option("--directional_dataset", type=click.BOOL, required=False, default=True,
-              help="whether to use a directional dataset for SDS where each view comes with a direction",
-               show_default=True)
 @click.option("--do_sds", type=click.BOOL, required=False, default=True,
               help="whether to use an uncertainty aware type loss",
                show_default=True)
@@ -214,7 +212,6 @@ def main(**kwargs) -> None:
                    id=wandb.util.generate_id())
         
     # parse os-checked path-strings into Pathlike Paths :)
-    data_path = Path(config.data_path)
     model_path = Path(config.ref_model_path)
     output_path = Path(config.output_path)
 
@@ -222,16 +219,14 @@ def main(**kwargs) -> None:
     log.info("logging configuration file ...")
     log_config_to_disk(config, output_path)
 
+    data_path = Path(config.data_path)
     if config.separate_train_test_folders:
-        train_dataset, test_dataset = (
-            PosedImagesDataset(
-                images_dir=data_path / mode,
-                camera_params_json=data_path / f"{mode}_camera_params.json",
+        train_dataset = PosedImagesDataset(
+                images_dir=data_path / "train",
+                camera_params_json=data_path / f"train_camera_params.json",
                 normalize_scene_scale=config.normalize_scene_scale,
                 downsample_factor=config.data_downsample_factor,
                 rgba_white_bkgd=config.white_bkgd,
-            )
-            for mode in ("train", "test")
         )
     else:
         train_dataset = PosedImagesDataset(
@@ -241,7 +236,6 @@ def main(**kwargs) -> None:
             downsample_factor=config.data_downsample_factor,
             rgba_white_bkgd=config.white_bkgd,
         )
-        test_dataset = None
 
     pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
         model_path=model_path,
@@ -255,12 +249,11 @@ def main(**kwargs) -> None:
     train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         sds_vol_mod=sds_vol_mod,
         pretrained_vol_mod=pretrained_vol_mod,
+        image_dims=config.image_dims,
         train_dataset=train_dataset,
         output_dir=output_path,
-        test_dataset=test_dataset,
         ray_batch_size=config.ray_batch_size,
-        num_stages=config.num_stages,
-        num_iterations_per_stage=config.num_iterations_edit,
+        num_iterations=config.num_iterations_edit,
         scale_factor=config.scale_factor,
         learning_rate=config.learning_rate,
         lr_decay_start=config.lr_decay_start,
@@ -273,7 +266,6 @@ def main(**kwargs) -> None:
         num_workers=config.num_workers,
         verbose_rendering=config.verbose_rendering,
         sds_prompt=config.prompt,
-        directional_dataset=config.directional_dataset,
         new_frame_frequency=config.new_frame_frequency,
         density_correlation_weight=config.density_correlation_weight,
         feature_correlation_weight=config.feature_correlation_weight,
@@ -312,18 +304,14 @@ def main(**kwargs) -> None:
             edit_idx=config.edit_idx,
             object_idx=config.object_idx,
             timestamp=config.timestamp,
-            ray_batch_size=config.ray_batch_size,
-            num_stages=config.num_stages,
-            num_iterations_per_stage=config.num_iterations_refine,
-            scale_factor=config.scale_factor,
+            image_dims=config.image_dims,
+            num_iterations=config.num_iterations_refine,
             learning_rate=config.learning_rate,
             save_freq=config.save_frequency,
             feedback_freq=config.feedback_frequency,
             summary_freq=config.summary_frequency,
             apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,
-            num_workers=config.num_workers,
             verbose_rendering=config.verbose_rendering,
-            directional_dataset=config.directional_dataset,
             attn_tv_weight=config.attn_tv_weight,
             kval=config.kval,
             log_wandb=config.log_wandb,
