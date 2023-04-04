@@ -323,12 +323,12 @@ class scoreDistillationLoss(nn.Module):
                  t_sched_start = 1500,
                  t_sched_freq = 500,
                  t_sched_gamma = 1.0,
-                 directional = False):
+                 directional = True):
         super().__init__()
         self.dir_to_indx_dict = {}
         self.directional = directional
+        
         # get sd model
-        #self.sd_model = StableDiffusion(device,"2.0", hf_key="Fictiverse/Stable_Diffusion_VoxelArt_Model")
         self.sd_model = StableDiffusion(device,
                                         "2.0",
                                         t_sched_start=t_sched_start,
