@@ -195,7 +195,7 @@ def get_random_pose(
     radius: float, device=torch.device("cpu")
 ) -> CameraPose:
     rand_pitch = float(np.random.rand(1) * 80.0)
-    rand_yaw = float(np.random.rand(1) * 180.0)
+    rand_yaw = float(np.random.rand(1) * 360.0)
     c2w = _translate_z(radius, device)
     c2w = _rotate_pitch(rand_pitch / 180.0 * np.pi, device) @ c2w
     c2w = _rotate_yaw(rand_yaw / 180.0 * np.pi, device) @ c2w
