@@ -3,7 +3,6 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
-import imageio
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -183,7 +182,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         directory.mkdir(exist_ok=True, parents=True)
     # fmt: on
 
-    # TODO (ES): Remove later
     # save the real_feedback_test_image if it exists:
     feedback_pose_given = False
     if render_feedback_pose is not None:
@@ -237,9 +235,9 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         sds_density = sds_vol_mod.thre3d_repr._densities
         sds_features = sds_vol_mod.thre3d_repr._features
 
-        # ---------------
-        #  Get Inputs:  |
-        # ---------------
+        # -------------------
+        #  Get Input Pose:  |
+        # -------------------
 
         if global_step % new_frame_frequency == 0 or global_step == 1:
             batch_size_in_images = int(ray_batch_size / (im_h * im_w))
@@ -270,7 +268,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
 
             else:
-                pose, dir = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
+                pose, dir, pitch, yaw = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
                 unflattened_rays = cast_rays(
                             train_dataset.camera_intrinsics,
                             pose,
@@ -346,6 +344,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         # wandb logging:
         if log_wandb:
             wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
+            wandb.log({"Pitch": pitch}, step=global_step)
+            wandb.log({"Yaw": yaw}, step=global_step)
             if tv_density_weight > 0:
                 wandb.log({"tv_density_loss" : tv_density_loss.item()}, step=global_step)
             if tv_features_weight > 0:
@@ -374,8 +374,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             or global_step == num_iterations
         ):
             loss_info_string = (
-                f"Iteration: {global_step} "
-                f"Stage Iteration: {global_step} "
+                f"Iteration: {global_step}, "
                 f"total_loss: {total_loss.item(): .3f} "
             )
             log.info(loss_info_string)

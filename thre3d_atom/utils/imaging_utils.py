@@ -194,7 +194,7 @@ def pose_spherical(
 def get_random_pose(
     radius: float, device=torch.device("cpu")
 ) -> CameraPose:
-    rand_pitch = float(np.random.rand(1) * 80.0)
+    rand_pitch = float(np.random.rand(1) * 90.0)
     rand_yaw = float(np.random.rand(1) * 360.0)
     c2w = _translate_z(radius, device)
     c2w = _rotate_pitch(rand_pitch / 180.0 * np.pi, device) @ c2w
@@ -202,14 +202,14 @@ def get_random_pose(
 
     # get dir
     dir = 'front'
-    if rand_yaw > 45.0:
+    if (rand_yaw > 45.0) and (rand_yaw < 315.0):
         dir = 'side'
-    if rand_yaw > 120.0:
+    if (rand_yaw > 120.0) and (rand_yaw < 240.0):
         dir = 'back'
-    if rand_pitch > 55.0:
+    if rand_pitch < 25.0:
         dir = 'overhead'
 
-    return CameraPose(rotation=c2w[:3, :3], translation=c2w[:3, 3:]), dir
+    return CameraPose(rotation=c2w[:3, :3], translation=c2w[:3, 3:]), dir, rand_pitch, rand_yaw
 
 
 # ----------------------------------------------------------------------------------
