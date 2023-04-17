@@ -65,13 +65,15 @@ To run the local edit demo, run:
 
 # General Usage:
 
-## Reconstruction:
+## Initialization:
 
 To learn an initial feature grid which reconstructs the input scene run:
 
     python train_sh_based_voxel_grid_with_posed_images.py -d <path to dataset folder>
                                                           -o <path to output folder>
                                                           --sh_degree 0
+
+This step is pre-requirement for performing editing.
 
 ## Editing:
 
@@ -91,5 +93,10 @@ The edit index is the index of the token associated with the edit word in the te
 To find this token for your text prompt we recommend using [this](https://huggingface.co/spaces/AttendAndExcite/Attend-and-Excite) 
 huggingface space.
 
+</br>
 
+# Acknowledgements:
+
+We thank [Animesh Karnewar](https://akanimax.github.io/) for his wonderful ReLU-Fields code on which we base our own.
+We also thank the "printable_models" user on [free3d](https://free3d.com/) for creating many of the meshes we use as data.
 

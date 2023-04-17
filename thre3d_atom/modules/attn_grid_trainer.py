@@ -220,7 +220,7 @@ def refine_edited_relu_field(
         #  Get Input Pose:  |
         # -------------------
 
-        pose, dir = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
+        pose, dir, _, _ = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
         unflattened_rays = cast_rays(
                     train_dataset.camera_intrinsics,
                     pose,
