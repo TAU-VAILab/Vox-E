@@ -22,7 +22,7 @@ train_default() {
 	-o logs/rf/${1}/${3}/ \
 	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-p "$2" \
-	--log_wandb=True
+	--log_wandb=False
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."

@@ -83,6 +83,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     sds_t_start: int = 1500,
     sds_t_gamma: float = 1.0,
     uncoupled_mode: bool = False,
+    data_pose_mode: bool = False,
     uncoupled_l2_mode: bool = False,
     log_wandb: bool = False,
 ) -> VolumetricModel:
@@ -152,7 +153,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         train_dataset.camera_intrinsics,
     )
     
-    if uncoupled_mode:
+    if uncoupled_mode or data_pose_mode:
         stagewise_train_datasets = [train_dataset]
         dataset_config_dict = train_dataset.get_config_dict()
         data_downsample_factor = dataset_config_dict["downsample_factor"]
@@ -165,10 +166,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             train_dataset, image_batch_cache_size, num_workers
         )
 
-        current_stage_train_dataset = stagewise_train_datasets[0]
-        train_dl = _make_dataloader_from_dataset(
-            current_stage_train_dataset, image_batch_cache_size, num_workers
-        )
         infinite_train_dl = iter(infinite_dataloader(train_dl))
 
     # setup output directories
@@ -242,7 +239,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         if global_step % new_frame_frequency == 0 or global_step == 1:
             batch_size_in_images = int(ray_batch_size / (im_h * im_w))
             
-            if uncoupled_mode:
+            if uncoupled_mode or data_pose_mode:
                 images, poses, indices = next(infinite_train_dl)
 
                 # cast rays for all the loaded images:
@@ -251,7 +248,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
 
                 for pose in poses:
                     unflattened_rays = cast_rays(
-                            current_stage_train_dataset.camera_intrinsics,
+                            train_dataset.camera_intrinsics,
                             CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
                             device=sds_vol_mod.device,
                         )
@@ -344,8 +341,6 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         # wandb logging:
         if log_wandb:
             wandb.log({"Input Direction": dir_to_num_dict[direction_batch[0]]}, step=global_step)
-            wandb.log({"Pitch": pitch}, step=global_step)
-            wandb.log({"Yaw": yaw}, step=global_step)
             if tv_density_weight > 0:
                 wandb.log({"tv_density_loss" : tv_density_loss.item()}, step=global_step)
             if tv_features_weight > 0:
@@ -360,6 +355,11 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 if feature_correlation_weight > 0:
                     wandb.log({"feature_correlation_loss" : feature_correlation_loss.item()}, step=global_step)
                 wandb.log({"density_correlation_loss" : density_correlation_loss.item()}, step=global_step)
+                if not data_pose_mode:
+                    wandb.log({"Pitch": pitch}, step=global_step)
+                    wandb.log({"Yaw": yaw}, step=global_step)
+                else:
+                    wandb.log({"Input Image": wandb.Image(images[selected_idx_in_batch[0]])}, step=global_step)
             lrs = [param_group["lr"] for param_group in optimizer.param_groups]
             wandb.log({"learning rate": lrs[0]}, step=global_step)
             wandb.log({"total_loss" : total_loss}, step=global_step)
@@ -398,7 +398,7 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
             )
             with torch.no_grad():
                 if not feedback_pose_given:
-                    if uncoupled_mode:
+                    if uncoupled_mode or data_pose_mode:
                         render_feedback_pose = CameraPose(
                             rotation=train_dataset[index_batch[0]][1][:, :3].cpu().numpy(),
                             translation=train_dataset[index_batch[0]][1][:, 3:].cpu().numpy(),

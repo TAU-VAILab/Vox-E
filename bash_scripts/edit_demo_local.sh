@@ -23,7 +23,7 @@ train_default() {
 	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-p "$2" \
 	-eidx ${4} \
-	--log_wandb=True \
+	--log_wandb=False \
 	--do_refinement=True
 
 	# Rendering Output Video:
