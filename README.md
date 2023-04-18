@@ -1,5 +1,7 @@
 # Vox-E: Text-guided Voxel Editing of 3D Objects
 
+This is the official pytorch implementation of Vox-E.
+
 [![arXiv](https://img.shields.io/badge/arXiv-2303.12048-b31b1b.svg)](https://arxiv.org/abs/2303.12048)
 
 [[Project Website](https://tau-vailab.github.io/Vox-E/)]
@@ -14,10 +16,15 @@
 ![Graph](https://tau-vailab.github.io/Vox-E/images/overview_official.png "Flow:")
 </br>
 
-## Description
-This is the official pytorch implementation of Vox-E.
-</br>
-</br>
+If you find our work useful in your research, please consider citing :)
+
+## BibTeX
+    @article{sella2023vox,
+     title={Vox-E: Text-guided Voxel Editing of 3D Objects},
+     author={Sella, Etai and Fiebelman, Gal and Hedman, Peter and Averbuch-Elor, Hadar},
+     journal={arXiv preprint arXiv:2303.12048},
+     year={2023}
+    }
 
 # Getting Started
 
