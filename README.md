@@ -35,7 +35,7 @@ If you find our work useful in your research, please consider citing :)
 </br>
 
 ## Setting up conda environment
-    conda create --name vox-e python=3.10 --yes
+    conda create --name vox-e python=3.10.10 --yes
     conda activate vox-e
     pip install -r requirements.txt
 
