@@ -37,7 +37,7 @@ def visualize_and_log_attention_maps(attn_maps: tuple, global_step: int, log_fre
     
 
 def calc_loss_on_attn_grid(attn_render: Tensor, attn_map: Tensor, token: str, 
-                           global_step: int, log_freq: int=50):
+                           global_step: int, log_freq: int=50, log_wandb=False):
     cmp = cm.get_cmap('jet')
     attn_render = attn_render.reshape(attn_map.shape)    
             
@@ -53,7 +53,7 @@ def calc_loss_on_attn_grid(attn_render: Tensor, attn_map: Tensor, token: str,
     diff_masked = diff * mask.float()
 
     # visualize mask
-    if (global_step % log_freq == 0) or (global_step == 0):
+    if ((global_step % log_freq == 0) or (global_step == 0)) and log_wandb:
         norm = colors.Normalize(vmin=0, vmax=torch.max(mask).item())
         mask_frame = cmp(norm(mask.cpu()))[:, :, :3]
         wandb.log({f"Mask {token}": wandb.Image(mask_frame)}, step=global_step)
