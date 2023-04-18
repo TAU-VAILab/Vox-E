@@ -35,7 +35,7 @@ If you find our work useful in your research, please consider citing :)
 </br>
 
 ## Setting up conda environment
-    conda create --name vox-e python=3.10 --yes
+    conda create --name vox-e python=3.10.10 --yes
     conda activate vox-e
     pip install -r requirements.txt
 
@@ -62,12 +62,28 @@ Local edits in our pipeline are refined using an additional refinement stage. No
 
 To run the global edit demo, run:
 
-    bash bash_scripts/edit_demo_global.py
+    bash bash_scripts/edit_demo_global.sh
 
 To run the local edit demo, run:
 
-    bash bash_scripts/edit_demo_local.py
+    bash bash_scripts/edit_demo_local.sh
+</br>
 
+When finished you should see a 360 rendering video of the edited output in:
+
+    Vox-E/output_renders/dog2/party_hat/rendered_video.mp4
+If you ran the local edit demo, or in:
+
+    Vox-E/output_renders/dog2/yarn/rendered_video.mp4
+if you ran the global edit demo.
+
+</br>
+
+### Tested Configuration
+This code has been tested with Python 3.10.10, PyTorch 1.13.0, CUDA 11.4 on Ubuntu 20.04.5 LTS. </br>
+Execution (for the editing stage) takes around 50 minutes on an NVIDIA RTX A5000 GPU. 
+
+</br>
 </br>
 
 # General Usage
