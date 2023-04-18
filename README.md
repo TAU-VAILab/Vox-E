@@ -28,8 +28,8 @@ This is the official pytorch implementation of Vox-E.
 </br>
 
 ## Setting up conda environment:
-    conda create --name <env_name> --python=3.10
-    conda activate <env_name>
+    conda create --name vox-e python=3.10 --yes
+    conda activate vox-e
     pip install -r requirements.txt
 
 </br>
