@@ -316,7 +316,8 @@ def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel,
                                         img_width: int,
                                         ids: Tensor,
                                         idxs: Tensor,
-                                        step: int = 0):
+                                        step: int = 0,
+                                        log_wandb: bool = False):
     
     # first visualize greater than grid:
     m = torch.nn.MaxPool3d(3, stride=1, padding=1)
@@ -337,7 +338,8 @@ def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel,
     # vis and log greater than attn map:
     norm = colors.Normalize(vmin=0, vmax=torch.max(attn_render).item())
     attn_frame = cmp(norm(attn_render.cpu()))[:, :, :3]
-    wandb.log({"GT Attn Map": wandb.Image(attn_frame)}, step=step)
+    if log_wandb:
+        wandb.log({"GT Attn Map": wandb.Image(attn_frame)}, step=step)
 
     # then visualize id based grid (graphcut output):
     gt_grid = torch.ones_like(vol_mod_edit.thre3d_repr.attn) * -20.0
@@ -353,7 +355,9 @@ def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel,
     # vis and log greater than attn map:
     norm = colors.Normalize(vmin=0, vmax=torch.max(attn_render).item())
     attn_frame = cmp(norm(attn_render.cpu()))[:, :, :3]
-    wandb.log({"GraphCut result Attn Map": wandb.Image(attn_frame)}, step=step)
+    if log_wandb:
+        wandb.log({"GraphCut result Attn Map": wandb.Image(attn_frame)}, step=step)
+
 
 
 def get_edit_region(vol_mod_edit: VolumetricModel, 
