@@ -62,11 +62,11 @@ Local edits in our pipeline are refined using an additional refinement stage. No
 
 To run the global edit demo, run:
 
-    bash bash_scripts/edit_demo_global.py
+    bash bash_scripts/edit_demo_global.sh
 
 To run the local edit demo, run:
 
-    bash bash_scripts/edit_demo_local.py
+    bash bash_scripts/edit_demo_local.sh
 </br>
 
 When finished you should see a 360 rendering video of the edited output in:
