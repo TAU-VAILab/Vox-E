@@ -87,6 +87,8 @@ Execution (for the editing stage) takes around 50 minutes on an NVIDIA RTX A5000
 
 # General Usage
 
+</br>
+
 ## Initialization
 
 To learn an initial feature grid which reconstructs the input scene run:
@@ -96,6 +98,8 @@ To learn an initial feature grid which reconstructs the input scene run:
                                                           --sh_degree 0
 
 This step is pre-requirement for performing editing.
+
+</br>
 
 ## Editing
 
