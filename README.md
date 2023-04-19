@@ -70,12 +70,11 @@ To run the local edit demo, run:
 </br>
 
 When finished you should see a 360 rendering video of the edited output in:
-
+Local edit demo:
     Vox-E/output_renders/dog2/party_hat/rendered_video.mp4
-If you ran the local edit demo, or in:
 
+Global edit demo:
     Vox-E/output_renders/dog2/yarn/rendered_video.mp4
-if you ran the global edit demo.
 
 </br>
 
