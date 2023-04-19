@@ -18,7 +18,7 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 train_default() {
 	# Train:
 	python edit_pretrained_relu_field.py \
-	-d data/${1}/ \
+	-d ./data/${1}/ \
 	-o logs/rf/${1}/${3}/ \
 	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-p "$2" \

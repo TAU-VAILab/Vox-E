@@ -19,19 +19,12 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 train_default() {
 	# Train:
 	python edit_pretrained_relu_field.py \
-	-d ../data/${1}/ \
+	-d ./data/${1}/ \
 	-o logs/rf/${2}/${1}/${4} \
-	-i logs/rf/${2}/${1}/ref/saved_models/model_final.pth \
+	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-p "$3" \
 	-eidx=${5} \
-	--num_iterations_edit=8000 \
-	--directional_dataset=True \
-	--density_correlation_weight=200 \
-	--tv_density_weight=20.0 \
-	--tv_features_weight=100.0 \
-	--learning_rate=0.027 \
 	--do_refinement=True \
-	--sds_t_start=3400 \
 	--sh_degree=0 # we currently only support diffuse
 
 	# Rendering Output Video:
@@ -46,34 +39,26 @@ train_default() {
 
 # STARTING RUN:
 
-#sweep_name=sweep_full_local
-#scene=taxi
-#prompt="a render of a yellow car with a huge rear spoiler"
-#log_name="spoiler"
-#eidx=8
-#
-#train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local
+sweep_name=sweep_full_local_extended
 scene=alien
-prompt="a render of an alien wearing a tuxedo"
-log_name="tuxedo_2"
-eidx=8
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local
-scene=alien
-prompt="a render of an alien wearing a christmas sweater"
-log_name="christmas2"
+prompt="a render of an alien wearing a party hat"
+log_name="party_hat"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_local
+sweep_name=sweep_full_local_extended
+scene=alien
+prompt="a render of an alien wearing a christmas sweater"
+log_name="christmas"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_local_extended
 scene=alien
 prompt="a render of an alien wearing big sunglasses"
-log_name="sunglasses2"
+log_name="sunglasses"
 eidx=8
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
