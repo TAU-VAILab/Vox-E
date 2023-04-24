@@ -77,8 +77,6 @@ Execution (for the editing stage) takes around 50 minutes on an NVIDIA RTX A5000
 
 # General Usage
 
-</br>
-
 ## Initialization
 
 To learn an initial feature grid which reconstructs the input scene run:
