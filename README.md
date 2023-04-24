@@ -16,16 +16,6 @@ This is the official pytorch implementation of Vox-E.
 ![Graph](https://tau-vailab.github.io/Vox-E/images/voxe_teaser.png "Flow:")
 </br>
 
-If you find our work useful in your research, please consider citing :)
-
-## BibTeX
-    @article{sella2023vox,
-     title={Vox-E: Text-guided Voxel Editing of 3D Objects},
-     author={Sella, Etai and Fiebelman, Gal and Hedman, Peter and Averbuch-Elor, Hadar},
-     journal={arXiv preprint arXiv:2303.12048},
-     year={2023}
-    }
-
 # Getting Started
 
 ## Getting the repo
@@ -119,6 +109,18 @@ The edit index is the index of the token associated with the edit word in the te
 To find this token for your text prompt we recommend using [this](https://huggingface.co/spaces/AttendAndExcite/Attend-and-Excite) 
 huggingface space.
 
+</br>
+
+## BibTeX
+If you find our work useful in your research, please consider citing:
+
+    @article{sella2023vox,
+     title={Vox-E: Text-guided Voxel Editing of 3D Objects},
+     author={Sella, Etai and Fiebelman, Gal and Hedman, Peter and Averbuch-Elor, Hadar},
+     journal={arXiv preprint arXiv:2303.12048},
+     year={2023}
+    }
+    
 </br>
 
 # Acknowledgements
