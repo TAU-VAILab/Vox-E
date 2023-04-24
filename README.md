@@ -73,7 +73,6 @@ This code has been tested with Python 3.10.10, PyTorch 1.13.0, CUDA 11.4 on Ubun
 Execution (for the editing stage) takes around 50 minutes on an NVIDIA RTX A5000 GPU. 
 
 </br>
-</br>
 
 # General Usage
 
