@@ -1,0 +1,10 @@
+# Camera parameters related keys
+EXTRINSIC = "extrinsic"
+INTRINSIC = "intrinsic"
+ROTATION = "rotation"
+DIRECTION = "dir"
+TRANSLATION = "translation"
+HEIGHT = "height"
+WIDTH = "width"
+FOCAL = "focal"
+BOUNDS = "bounds"

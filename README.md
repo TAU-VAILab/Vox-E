@@ -125,5 +125,3 @@ huggingface space.
 
 We thank [Animesh Karnewar](https://akanimax.github.io/) for his wonderful ReLU-Fields code on which we base our own.
 We also thank the "printable_models" user on [free3d](https://free3d.com/) for creating many of the meshes we use as data.
-
-
