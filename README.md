@@ -13,18 +13,8 @@ This is the official pytorch implementation of Vox-E.
 >**Abstract** <br>
 > Large scale text-guided diffusion models have garnered significant attention due to their ability to synthesize diverse images that convey complex visual concepts. This generative power has more recently been leveraged to perform text-to-3D synthesis. In this work, we present a technique that harnesses the power of latent diffusion models for editing existing 3D objects. Our method takes oriented 2D images of a 3D object as input and learns a grid-based volumetric representation of it. To guide the volumetric representation to conform to a target text prompt, we follow unconditional text-to-3D methods and optimize a Score Distillation Sampling (SDS) loss. However, we observe that combining this diffusion-guided loss with an image-based regularization loss that encourages the representation not to deviate too strongly from the input object is challenging, as it requires achieving two conflicting goals while viewing only structure-and-appearance coupled 2D projections. Thus, we introduce a novel volumetric regularization loss that operates directly in 3D space, utilizing the explicit nature of our 3D representation to enforce correlation between the global structure of the original and edited object. Furthermore, we present a technique that optimizes cross-attention volumetric grids to refine the spatial extent of the edits. Extensive experiments and comparisons demonstrate the effectiveness of our approach in creating a myriad of edits which cannot be achieved by prior works.
 
-![Graph](https://tau-vailab.github.io/Vox-E/images/overview_official.png "Flow:")
+![Graph](https://tau-vailab.github.io/Vox-E/images/voxe_teaser.png "Flow:")
 </br>
-
-If you find our work useful in your research, please consider citing :)
-
-## BibTeX
-    @article{sella2023vox,
-     title={Vox-E: Text-guided Voxel Editing of 3D Objects},
-     author={Sella, Etai and Fiebelman, Gal and Hedman, Peter and Averbuch-Elor, Hadar},
-     journal={arXiv preprint arXiv:2303.12048},
-     year={2023}
-    }
 
 # Getting Started
 
@@ -64,18 +54,17 @@ To run the global edit demo, run:
 
     bash bash_scripts/edit_demo_global.sh
 
-To run the local edit demo, run:
+To run the local edit demo there is a requirement to add a Hugging Face authenticion token, run:
 
-    bash bash_scripts/edit_demo_local.sh
+    bash bash_scripts/edit_demo_local.sh -a <Hugging Face authentication token>
 </br>
 
 When finished you should see a 360 rendering video of the edited output in:
-
+Local edit demo:
     Vox-E/output_renders/dog2/party_hat/rendered_video.mp4
-If you ran the local edit demo, or in:
 
+Global edit demo:
     Vox-E/output_renders/dog2/yarn/rendered_video.mp4
-if you ran the global edit demo.
 
 </br>
 
@@ -83,7 +72,6 @@ if you ran the global edit demo.
 This code has been tested with Python 3.10.10, PyTorch 1.13.0, CUDA 11.4 on Ubuntu 20.04.5 LTS. </br>
 Execution (for the editing stage) takes around 50 minutes on an NVIDIA RTX A5000 GPU. 
 
-</br>
 </br>
 
 # General Usage
@@ -98,6 +86,8 @@ To learn an initial feature grid which reconstructs the input scene run:
 
 This step is pre-requirement for performing editing.
 
+</br>
+
 ## Editing
 
 To run our system and perform textual edits on 3D scenes run:
@@ -107,19 +97,36 @@ To run our system and perform textual edits on 3D scenes run:
                                          -i <path to initial feature grid>
                                          -p <text prompt>
 
-To perform local edits and use the refinement stage, two additional arguments are required:
+To perform local edits and use the refinement stage, three additional arguments are required:
 
     --do_refinement True
     --edit_idx <index of edit token>
+    --hf_auth_token <Hugging Face authentication token>
 
 The edit index is the index of the token associated with the edit word in the text prompt (for example the word "hat" in the prompt - "a dog wearing a hat"). </br>
 To find this token for your text prompt we recommend using [this](https://huggingface.co/spaces/AttendAndExcite/Attend-and-Excite) 
 huggingface space.
 
+We offer also an additonal post-processing stage for denoising by retaining the largest connected component, to perform
+this exra stage add the following argument:
+
+	--post_process_scc True
+
+</br>
+
+## BibTeX
+If you find our work useful in your research, please consider citing:
+
+    @article{sella2023vox,
+     title={Vox-E: Text-guided Voxel Editing of 3D Objects},
+     author={Sella, Etai and Fiebelman, Gal and Hedman, Peter and Averbuch-Elor, Hadar},
+     journal={arXiv preprint arXiv:2303.12048},
+     year={2023}
+    }
+    
 </br>
 
 # Acknowledgements
 
 We thank [Animesh Karnewar](https://akanimax.github.io/) for his wonderful ReLU-Fields code on which we base our own.
 We also thank the "printable_models" user on [free3d](https://free3d.com/) for creating many of the meshes we use as data.
-

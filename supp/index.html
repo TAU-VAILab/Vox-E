@@ -1,0 +1,316 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <link href='https://fonts.googleapis.com/css?family=Noto Sans' rel='stylesheet'>
+    <link href='https://fonts.googleapis.com/css?family=Indie Flower' rel='stylesheet'>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Vox-E: Text-guided Voxel Editing of 3D Objects</title>
+<!--    <link rel="icon" href="../pics/wis_logo.jpg">-->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Noto Sans">
+    <link href="./style_supp.css" rel="stylesheet" type="text/css">
+</head>
+<script type="text/javascript">
+    src=hover.js;
+</script>
+<body>
+	<button style="position: fixed;right: 15px;top:  50%;height: 100px;width: 140px; font-size: 20px;" type="button"><a href="#top">Back to top</a></button>
+<div class="page-container" >
+  <h1 align="center">Vox-E:  Text-guided Voxel Editing of 3D Objects</h1>
+  <h2 align="center">Supplementary Material</h2>
+	
+  <p align="center">&nbsp;</p>	
+  <h5 align="left">
+    Please click on the sections below to view our interactive results, comparisons and ablations:
+  </h5>
+	<a href="#top"></a>
+  <ul>
+	<li><a href="index.html">Our Results</a></li>
+    <li><a href="results_extreme.html">Our Results on Extreme Edits</a></li>
+	<li><a href="results_real.html">Our Results on Real Scenes</a></li>
+	<li><a href="comparisons.html">Comparisons</a></li>
+	<li><a href="ablations.html">Ablations</a></li>
+	<li><a href="ablations_sh.html">Additional Ablations</a></li>
+  </ul>
+
+
+  <!------------------ BEGIN SECTION ------------------>
+
+  <p>&nbsp;</p>
+  <hr>
+
+  <h2 id="our_results_container" align="left"><a name="image-results" id="image-results"></a>Our Results</h2>
+
+
+  <p align="left">
+    Sample results from our framework (part of which are shown in Fig.4). <br>
+	We show renderings of the initial grid (denoted by "Initial") alongside the edited grid (denoted by "Edited"). <br>
+	For local edits, we perform our optional refinement stage (these prompts are emphasized in <span class="prompt_title_local">green</span>).
+  </p>
+
+  <br/>
+  <br>
+
+
+  <table class="result-table" width="100%" align="center">
+		<tbody>
+                <tr>
+                    <th colspan="2" width="30%" class="prompt_title_local">"A cat with a birthday hat"</th>
+                    <th colspan="2" width="30%" class="prompt_title">"A black swan"</th>
+                    <th colspan="2" width="30%" class="prompt_title_local">"A kangaroo on skis"</th>
+                </tr>
+                <!-- <tr> <td> <p>&nbsp;</p> </td> </tr> -->
+                <!-- loop onmouseover="this.play();" onmouseout="this.pause();" -->
+				<tr>
+                    <td colspan="2">
+                        <div class="video-container1">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%" class="result-video1">
+                                <source src=".\results\synthetic\cat_birthday_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\duck_black_swan_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\kangaroo_skis_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                </tr>
+                <tr>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                </tr>
+
+                <tr> <td> <br /> <br /> </td> </tr>
+                <!------------------ END ROW ------------------>
+                <tr>
+                    <th colspan="2" width="30%" class="prompt_title">"A dog in low-poly video game style"</th>
+                    <th colspan="2" width="30%" class="prompt_title_local">"An alien wearing a tuxedo"</th>
+                    <th colspan="2" width="30%" class="prompt_title">"A wood carving of a cat"</th>
+                </tr>
+                <!-- <tr> <td> <p>&nbsp;</p> </td> </tr> -->
+                <!-- loop onmouseover="this.play();" onmouseout="this.pause();" -->
+                <tr>
+                    <td colspan="2">
+                        <div class="video-container1">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%" class="result-video1">
+                                <source src=".\results\synthetic\dog_lowpoly_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\alien_tuxedo_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\cat_wood_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                </tr>
+                <tr>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                </tr>
+                <tr> <td> <br /> <br /> </td> </tr>
+                <!------------------ END ROW ------------------>
+                <tr>
+                    <th colspan="2" width="30%" class="prompt_title_local">"An duck wearing a wizard's hat"</th>
+                    <th colspan="2" width="30%" class="prompt_title">"A yarn doll of a kangaroo"</th>
+					<th colspan="2" width="30%" class="prompt_title_local">"A dog wearing a bandana around its neck"</th>
+                </tr>
+                <!-- <tr> <td> <p>&nbsp;</p> </td> </tr> -->
+                <!-- loop onmouseover="this.play();" onmouseout="this.pause();" -->
+                <tr>
+                    <td colspan="2">
+                        <div class="video-container1">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%" class="result-video1">
+                                <source src=".\results\synthetic\duck_wizard_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\kangaroo_yarn_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+					<td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\dog_bandana_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                </tr>
+                <tr>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                </tr>
+                <tr> <td> <br /> <br /> </td> </tr>
+                <!------------------ END ROW ------------------>
+                <tr>
+                    <th colspan="2" width="30%" class="prompt_title">"A rainbow colored microphone"</th>
+                    <th colspan="2" width="30%" class="prompt_title_local">"A bulldozer on a magic carpet"</th>
+                    <th colspan="2" width="30%" class="prompt_title">"A motorsport racer"</th>
+                </tr>
+                <!-- <tr> <td> <p>&nbsp;</p> </td> </tr> -->
+                <!-- loop onmouseover="this.play();" onmouseout="this.pause();" -->
+                <tr>
+                    <td colspan="2">
+                        <div class="video-container1">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%" class="result-video1">
+                                <source src=".\results\synthetic\rainbow_mic_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\lego_carpet_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\alien_racer_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                </tr>
+                <tr>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                </tr>
+                <tr> <td> <br /> <br /> </td> </tr>
+                <!------------------ END ROW ------------------>
+                <tr>
+                    <th colspan="2" width="30%" class="prompt_title_local">"A cactus in a pot"</th>
+                    <th colspan="2" width="30%" class="prompt_title">"A frog with leopard spots"</th>
+					<th colspan="2" width="30%" class="prompt_title_local">"A kangaroo on rollerskates"</th>
+                </tr>
+                <!-- <tr> <td> <p>&nbsp;</p> </td> </tr> -->
+                <!-- loop onmouseover="this.play();" onmouseout="this.pause();" -->
+                <tr>
+                    <td colspan="2">
+                        <div class="video-container1">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%" class="result-video1">
+                                <source src=".\results\synthetic\ficus_cactus_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                    <td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\frog_leopard_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+					<td colspan="2">
+                        <div class="video-container">
+                            <video onmouseover="this.play();" onmouseout="this.removeAttribute('controls');this.load()" muted width="95%"  class="result-video">
+                                <source src=".\results\synthetic\kangaroo_rollerskates_merged.mp4" type="video/mp4">
+                            </video>
+                    </td>
+                </tr>
+                <tr>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                    <td width="14%">
+                        <div align="center" class="video-label">Initial</div>
+                    </td>
+                    <td width="16%">
+                        <div align="center" class="video-label">Edited&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                    </td>
+                </tr>
+                <tr> <td> <br /> <br /> </td> </tr>
+                <!------------------ END ROW ------------------>
+		</tbody>
+	</table>
+    <!------------------ END SECTION ------------------>
+
+
+  <p><br>
+  </p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+
+</div>
+
+</body></html>
