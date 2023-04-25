@@ -7,6 +7,8 @@ import copy
 from datetime import datetime
 from easydict import EasyDict
 from torch.backends import cudnn
+import cc3d
+import numpy as np
 
 from thre3d_atom.data.datasets import PosedImagesDataset
 from thre3d_atom.modules.sds_trainer import train_sh_vox_grid_vol_mod_with_posed_images_and_sds
@@ -129,8 +131,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                    "note that this will be ignored if GPU-caching of the data is successful :)", show_default=True)
 @click.option("--log_wandb", type=click.BOOL, required=False, default=False,
               help="whether to use white background for training with synthetic (background-less) scenes :)",
-              show_default=True) 
-@click.option("--wandb_username", type=click.STRING, required=False, default="etaisella", 
+              show_default=True)
+@click.option("--wandb_username", type=click.STRING, required=False, default="etaisella",
               help="wandb user name used for logging", show_default=True)
 @click.option("--wandb_project_name", type=click.STRING, required=False, default="Vox-E",
               help="sds prompt used for SDS based loss", show_default=True)
@@ -183,11 +185,25 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # -------------------------------------------------------------------------------------
 @click.option("--do_refinement", type=click.BOOL, required=False, default=False,    # |
               help="whether to use the refinement stage for improving local edits", # |
-              show_default=True)                                                    # |              
+              show_default=True)                                                    # |
 # -------------------------------------------------------------------------------------
 
+
+@click.option("--hf_auth_token", type=click.STRING, required=False, default="",
+              help="hugging face model token for stable diffusion 1.4",
+              show_default=True)
 @click.option("--kval", type=click.FLOAT, required=False, default=5.0,
               help="k value used in graphcut", show_default=True)
+@click.option("--edit_mask_thresh", type=click.FLOAT, required=False, default=0.992,
+              help="probability threshold for edit voxels in graph cut stage", show_default=True)
+@click.option("--num_obj_voxels_thresh", type=click.INT, required=False, default=5000,
+              help="number of voxels to mark as object in graph cut stage", show_default=True)
+@click.option("--min_num_edit_voxels", type=click.INT, required=False, default=300,
+              help="minimum number of voxels to mark as edit in graph cut stage", show_default=True)
+@click.option("--top_k_edit_thresh", type=click.INT, required=False, default=300,
+              help="number of voxels to mark as edit in graph cut stage if less than minimum reached", show_default=True)
+@click.option("--top_k_obj_thresh", type=click.INT, required=False, default=200,
+              help="number of voxels to mark as object in graph cut stage if less than minimum reached", show_default=True)
 @click.option("--attn_tv_weight", type=click.FLOAT, required=False, default=0.01,
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
 @click.option("--num_iterations_refine", type=click.INT, required=False, default=1500,
@@ -202,6 +218,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="removes relu field coupling and learns in image space",
                show_default=True)
 
+
+@click.option("--post_process_scc", type=click.BOOL, required=False, default=False,
+              help="run post process strongly connected components",
+               show_default=True)
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
@@ -213,7 +233,7 @@ def main(**kwargs) -> None:
         wandb.init(project=config.wandb_project_name, entity=config.wandb_username,
                    config=dict(config), name="test " + str(datetime.now()),
                    id=wandb.util.generate_id())
-        
+
     # parse os-checked path-strings into Pathlike Paths :)
     model_path = Path(config.ref_model_path)
     output_path = Path(config.output_path)
@@ -296,6 +316,11 @@ def main(**kwargs) -> None:
             thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
             device=device,
         )
+        sds_vol_mod, _ = create_volumetric_model_from_saved_model_attn(
+            model_path=output_path / f"saved_models" / f"model_final.pth",
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
+            device=device,
+        )
 
         refine_edited_relu_field(
             vol_mod_edit=vol_mod_edit,
@@ -303,6 +328,7 @@ def main(**kwargs) -> None:
             vol_mod_ref=pretrained_vol_mod,
             vol_mod_output=sds_vol_mod,
             train_dataset=train_dataset,
+            hf_auth_token=config.hf_auth_token,
             output_dir=output_path,
             prompt=config.prompt,
             edit_idx=config.edit_idx,
@@ -318,7 +344,66 @@ def main(**kwargs) -> None:
             verbose_rendering=config.verbose_rendering,
             attn_tv_weight=config.attn_tv_weight,
             kval=config.kval,
+            edit_mask_thresh=config.edit_mask_thresh,
+            num_obj_voxels_thresh=config.num_obj_voxels_thresh,
+            min_num_edit_voxels=config.min_num_edit_voxels,
+            top_k_edit_thresh=config.top_k_edit_thresh,
+            top_k_obj_thresh=config.top_k_obj_thresh,
             log_wandb=config.log_wandb,
+        )
+        if config.post_process_scc:
+            vol_mod, _ = create_volumetric_model_from_saved_model_attn(
+                model_path=output_path / f"saved_models" / f"model_final_refined.pth",
+                thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
+                device=device,
+            )
+
+            orig_d = vol_mod.thre3d_repr._densities.detach().cpu().numpy()
+            reg_d = pretrained_vol_mod.thre3d_repr._densities.detach().cpu().numpy()
+            densities = np.where(vol_mod.thre3d_repr._densities.detach().cpu().numpy()> 0, 1, 0).squeeze(-1)
+            aa, N = cc3d.largest_k(
+                densities, k=10,
+                connectivity=26, delta=0,
+                return_N=True,
+            )
+            orig_d[aa != 10] = reg_d[aa != 10]
+            vol_mod.thre3d_repr._densities = torch.nn.Parameter(torch.Tensor(orig_d).to(vol_mod.device))
+            torch.save(
+                vol_mod.get_save_info(
+                    extra_info={
+                        "camera_bounds": train_dataset.camera_bounds,
+                        "camera_intrinsics": train_dataset.camera_intrinsics,
+                        "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
+                    }
+                ),
+                output_path / f"saved_models" / f"model_final_refined.pth",
+            )
+    elif config.post_process_scc:
+        vol_mod, _ = create_volumetric_model_from_saved_model(
+            model_path=output_path / f"saved_models" / f"model_final.pth",
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
+            device=device,
+        )
+
+        orig_d = vol_mod.thre3d_repr._densities.detach().cpu().numpy()
+        reg_d = pretrained_vol_mod.thre3d_repr._densities.detach().cpu().numpy()
+        densities = np.where(vol_mod.thre3d_repr._densities.detach().cpu().numpy() > 0, 1, 0).squeeze(-1)
+        aa, N = cc3d.largest_k(
+            densities, k=10,
+            connectivity=26, delta=0,
+            return_N=True,
+        )
+        orig_d[aa != 10] = reg_d[aa != 10]
+        vol_mod.thre3d_repr._densities = torch.nn.Parameter(torch.Tensor(orig_d).to(vol_mod.device))
+        torch.save(
+            vol_mod.get_save_info(
+                extra_info={
+                    "camera_bounds": train_dataset.camera_bounds,
+                    "camera_intrinsics": train_dataset.camera_intrinsics,
+                    "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
+                }
+            ),
+            output_path / f"saved_models" / f"model_final.pth",
         )
 
 if __name__ == "__main__":
