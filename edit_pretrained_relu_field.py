@@ -351,7 +351,34 @@ def main(**kwargs) -> None:
             top_k_obj_thresh=config.top_k_obj_thresh,
             log_wandb=config.log_wandb,
         )
-    if config.post_process_scc:
+        if config.post_process_scc:
+            vol_mod, _ = create_volumetric_model_from_saved_model_attn(
+                model_path=output_path / f"saved_models" / f"model_final_refined.pth",
+                thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
+                device=device,
+            )
+
+            orig_d = vol_mod.thre3d_repr._densities.detach().cpu().numpy()
+            reg_d = pretrained_vol_mod.thre3d_repr._densities.detach().cpu().numpy()
+            densities = np.where(vol_mod.thre3d_repr._densities.detach().cpu().numpy()> 0, 1, 0).squeeze(-1)
+            aa, N = cc3d.largest_k(
+                densities, k=10,
+                connectivity=26, delta=0,
+                return_N=True,
+            )
+            orig_d[aa != 10] = reg_d[aa != 10]
+            vol_mod.thre3d_repr._densities = torch.nn.Parameter(torch.Tensor(orig_d).to(vol_mod.device))
+            torch.save(
+                vol_mod.get_save_info(
+                    extra_info={
+                        "camera_bounds": train_dataset.camera_bounds,
+                        "camera_intrinsics": train_dataset.camera_intrinsics,
+                        "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
+                    }
+                ),
+                output_path / f"saved_models" / f"model_final_refined.pth",
+            )
+    elif config.post_process_scc:
         vol_mod, _ = create_volumetric_model_from_saved_model(
             model_path=output_path / f"saved_models" / f"model_final.pth",
             thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
@@ -360,7 +387,7 @@ def main(**kwargs) -> None:
 
         orig_d = vol_mod.thre3d_repr._densities.detach().cpu().numpy()
         reg_d = pretrained_vol_mod.thre3d_repr._densities.detach().cpu().numpy()
-        densities = np.where(vol_mod.thre3d_repr._densities.detach().cpu().numpy()> 0, 1, 0).squeeze(-1)
+        densities = np.where(vol_mod.thre3d_repr._densities.detach().cpu().numpy() > 0, 1, 0).squeeze(-1)
         aa, N = cc3d.largest_k(
             densities, k=10,
             connectivity=26, delta=0,
@@ -378,7 +405,6 @@ def main(**kwargs) -> None:
             ),
             output_path / f"saved_models" / f"model_final.pth",
         )
-
 
 if __name__ == "__main__":
     main()

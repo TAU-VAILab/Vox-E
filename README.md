@@ -54,9 +54,9 @@ To run the global edit demo, run:
 
     bash bash_scripts/edit_demo_global.sh
 
-To run the local edit demo, run:
+To run the local edit demo there is a requirement to add a Hugging Face authenticion token, run:
 
-    bash bash_scripts/edit_demo_local.sh
+    bash bash_scripts/edit_demo_local.sh -a <Hugging Face authentication token>
 </br>
 
 When finished you should see a 360 rendering video of the edited output in:
@@ -97,14 +97,20 @@ To run our system and perform textual edits on 3D scenes run:
                                          -i <path to initial feature grid>
                                          -p <text prompt>
 
-To perform local edits and use the refinement stage, two additional arguments are required:
+To perform local edits and use the refinement stage, three additional arguments are required:
 
     --do_refinement True
     --edit_idx <index of edit token>
+    --hf_auth_token <Hugging Face authentication token>
 
 The edit index is the index of the token associated with the edit word in the text prompt (for example the word "hat" in the prompt - "a dog wearing a hat"). </br>
 To find this token for your text prompt we recommend using [this](https://huggingface.co/spaces/AttendAndExcite/Attend-and-Excite) 
 huggingface space.
+
+We offer also an additonal post-processing stage for denoising by retaining the largest connected component, to perform
+this exra stage add the following argument:
+
+	--post_process_scc True
 
 </br>
 

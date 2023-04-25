@@ -3,10 +3,11 @@ echo "Starting Run!"
 
 # Reading arguments:
 gpu_num=0
-while getopts g:d: flag
+while getopts g:a: flag
 do
     case "${flag}" in
         g) gpu_num=${OPTARG};;
+    a) hf_auth_token_in=${OPTARG};;
     esac
 done
 
@@ -24,7 +25,8 @@ train_default() {
 	-p "$2" \
 	-eidx ${4} \
 	--log_wandb=False \
-	--do_refinement=True
+	--do_refinement=True \
+	--hf_auth_token=${5}
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
@@ -35,10 +37,11 @@ train_default() {
 
 # STARTING RUN:
 
-scene=cat2
-prompt="a render of a cat with a party hat"
+scene=dog2
+prompt="a render of a dog with a party hat"
 log_name="party_hat"
 eidx=9
 oidx=5
+hf_auth_token=$hf_auth_token_in
 
-train_default $scene "$prompt" $log_name $eidx
+train_default $scene "$prompt" $log_name $eidx $hf_auth_token

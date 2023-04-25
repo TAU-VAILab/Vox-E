@@ -437,17 +437,17 @@ def refine_edited_relu_field(
     #  Perform graph cut and refine grid:  |
     # --------------------------------------
 
-        log.info(f"Starting Grid Refinement!")
-        get_edit_region(vol_mod_edit=vol_mod_edit,
-                        vol_mod_object=vol_mod_object,
-                        vol_mod_output=vol_mod_output,
-                        rays=rays_batch,
-                        img_height=im_h,
-                        img_width=im_w,
-                        step=global_step,
-                        K=kval, edit_mask_thresh=edit_mask_thresh,
-                        num_obj_voxels_thresh=num_obj_voxels_thresh, min_num_edit_voxels=min_num_edit_voxels,
-                        top_k_edit_thresh=top_k_edit_thresh, top_k_obj_thresh=top_k_obj_thresh)
+    log.info(f"Starting Grid Refinement!")
+    get_edit_region(vol_mod_edit=vol_mod_edit,
+                    vol_mod_object=vol_mod_object,
+                    vol_mod_output=vol_mod_output,
+                    rays=rays_batch,
+                    img_height=im_h,
+                    img_width=im_w,
+                    step=global_step,
+                    K=kval, edit_mask_thresh=edit_mask_thresh,
+                    num_obj_voxels_thresh=num_obj_voxels_thresh, min_num_edit_voxels=min_num_edit_voxels,
+                    top_k_edit_thresh=top_k_edit_thresh, top_k_obj_thresh=top_k_obj_thresh)
 
     # change densities and features without optimization:
     regular_density = vol_mod_ref.thre3d_repr._densities.detach()
@@ -513,7 +513,7 @@ def refine_edited_relu_field(
                 "hemispherical_radius": train_dataset.get_hemispherical_radius_estimate(),
             }
         ),
-        model_dir / f"model_final.pth",
+        model_dir / f"model_final_refined.pth",
     )
 
     # training complete yay! :)
