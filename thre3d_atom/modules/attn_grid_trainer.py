@@ -228,7 +228,7 @@ def refine_edited_relu_field(
         #  Get Input Pose:  |
         # -------------------
 
-        pose, dir = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
+        pose, dir, _, _ = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
         unflattened_rays = cast_rays(
                     train_dataset.camera_intrinsics,
                     pose,
@@ -289,16 +289,18 @@ def refine_edited_relu_field(
         #  Incur Losses:  |
         # -----------------
 
-        edit_attn_loss = calc_loss_on_attn_grid(attn_render=edit_attn_rendered_batch,
-                                                attn_map=edit_attn_map,
-                                                token="edit",
-                                                global_step=global_step)
+        edit_attn_loss = calc_loss_on_attn_grid(attn_render=edit_attn_rendered_batch, 
+                                                attn_map=edit_attn_map, 
+                                                token="edit", 
+                                                global_step=global_step,
+                                                log_wandb=log_wandb)
 
         object_attn_loss = calc_loss_on_attn_grid(attn_render=object_attn_rendered_batch,
                                                   attn_map=object_attn_map,
                                                   token="object",
-                                                  global_step=global_step)
-
+                                                  global_step=global_step,
+                                                  log_wandb=log_wandb)
+            
         edit_attn_render = edit_attn_rendered_batch.reshape(edit_attn_map.shape)
         object_attn_render = object_attn_rendered_batch.reshape(edit_attn_map.shape)
 

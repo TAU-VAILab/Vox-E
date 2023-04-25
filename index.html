@@ -1,0 +1,363 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <link href='https://fonts.googleapis.com/css?family=Noto Sans' rel='stylesheet'>
+    <link href='https://fonts.googleapis.com/css?family=Indie Flower' rel='stylesheet'>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="google-site-verification" content="xdvJxvo39Ei0nahgmgXGp9DCslFea8wH789x6mmAY-A" />
+    
+    <meta property="og:site_name" content="Vox-E" />
+    <meta property="og:type" content="video.other" />
+    <meta property="og:title" content="Vox-E: Text-guided Voxel Editing of 3D Objects" />
+    <meta property="og:description" content="We use voxel grids and 2D diffusion to make local and global textual edits to 3D shapes" />
+    <meta property="og:url" content="https://tau-vailab.github.io/Vox-E/" />
+    <meta property="og:image" content="https://tau-vailab.github.io/Vox-E/images/voxe_sample.png" />
+
+    <meta property="article:publisher" content="https://tau-vailab.github.io/Vox-E/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Vox-E: Text-guided Voxel Editing of 3D Objects" />
+    <meta name="twitter:description" content="We use voxel grids and 2D diffusion to make local and global textual edits to 3D shapes" />
+    <meta name="twitter:url" content="https://tau-vailab.github.io/Vox-E/" />
+    <meta name="twitter:image" content="https://tau-vailab.github.io/Vox-E/images/voxe_sample.png" />
+
+    <title>Vox-E: Text-guided Voxel Editing of 3D Objects</title>
+<!--    <link rel="icon" href="../pics/wis_logo.jpg">-->
+    <link rel="icon" href="images/browser_icon.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css">
+    <link href="style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+<div class="page-container" >
+    <script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
+
+    <!-- title -->
+    <h1 class="ourh1" align="center">Vox-E</h1>
+    <h2 class="ourh2" align="center">Text-guided Voxel Editing of 3D Objects</h2>
+
+    <!-- authors and affiliations -->
+    <section class="authors_block">
+        <div class="authors" align="center">
+            <span class="author-block"><a href="https://www.linkedin.com/in/etai-sella-1792b2154/" target="_blank">Etai Sella</a><sup>1</sup>,</span>
+            <span class="author-block"><a href="https://www.linkedin.com/in/gal-fiebelman-b923031b4/" target="_blank">Gal Fiebelman</a><sup>1</sup>,</span>
+            <span class="author-block"><a href="https://phogzone.com/" target="_blank">Peter Hedman</a><sup>2</sup>,</span>
+            <span class="author-block"><a href="https://www.elor.sites.tau.ac.il/" target="_blank">Hadar Averbuch-Elor</a><sup>1</sup></span>
+        </div>
+
+        <div class="affiliations" align="center">
+            <span class="author-block"><sup>1</sup>Tel Aviv University, </span>
+            <span class="author-block"><sup>2</sup>Google Research</span>
+        </div>
+    </section>
+
+    <!-- link buttons -->
+    <div class="column has-text-centered">
+        <div class="publication-links" align="center">
+          
+          <!-- arxiv link -->
+          <span class="link-block">
+            <a href="https://arxiv.org/abs/2303.12048/" class="paper-link" style="display: inline-block">
+                <button class="button">
+                    <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                    </span>
+                    <span>arXiv</span>
+                  </button>
+            </a>
+          </span>
+          
+          <!-- Github Link. -->
+          <span class="link-block">
+            <a href="https://github.com/TAU-VAILab/Vox-E" style="display: inline-block">
+                <button class="button">
+                    <span class="icon">
+                        <i class="fa fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </button>
+            </a>
+          </span>
+
+          <!-- Supp Link. -->
+          <span class="link-block">
+            <a href="supp/index.html" style="display: inline-block">
+                <button class="button">
+                    <span class="icon">
+                        <i class="fa fa-plus-square"></i>
+                    </span>
+                    <span>Supplementary Material</span>
+                  </button>
+            </a>
+          </span>
+        </div>
+    </div>
+
+    <!-- slider -->
+    <!-- Slider main container -->
+    <div class="swiper">
+        <!-- Additional required wrapper -->
+        <div class="swiper-wrapper">
+          <!-- Slides -->
+          <!-- Slide 1 -->
+          <div class="swiper-slide">
+            <table class="slide-table" width="100%" align="center">
+                <tbody>
+                    <tr>
+                        <th colspan="2" width="90%" class="prompt_title_local" align="center">"A kangaroo on rollerskates"</th>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <video loop autoplay  muted width="95%"  class="result-video">
+                                <source src=".\videos\kangaroo_rollerskates_small.mp4" type="video/mp4">
+                            </video>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="45%">
+                            <div align="center" class="video-label-slides">Initial</div>
+                        </td>
+                        <td width="41%">
+                            <div align="center" class="video-label-slides">Edited&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+          </div>
+          <!-- Slide 2 -->
+          <div class="swiper-slide">
+            <table class="slide-table" width="100%" align="center">
+                <tbody>
+                    <tr>
+                        <th colspan="2" width="90%" class="prompt_title" align="center">"A dog in low-poly video game style"</th>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <video loop autoplay  muted width="95%"  class="result-video">
+                                <source src=".\videos\dog_lowpoly_small.mp4" type="video/mp4">
+                            </video>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="45%">
+                            <div align="center" class="video-label-slides">Initial</div>
+                        </td>
+                        <td width="41%">
+                            <div align="center" class="video-label-slides">Edited&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+          </div>
+          <!-- Slide 3 -->
+          <div class="swiper-slide">
+            <table class="slide-table" width="100%" align="center">
+                <tbody>
+                    <tr>
+                        <th colspan="2" width="90%" class="prompt_title_local" align="center">"An alien wearing a tuxedo"</th>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <video loop autoplay  muted width="95%"  class="result-video">
+                                <source src=".\videos\alien_tux_small.mp4" type="video/mp4">
+                            </video>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="45%">
+                            <div align="center" class="video-label-slides">Initial</div>
+                        </td>
+                        <td width="41%">
+                            <div align="center" class="video-label-slides">Edited&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+          </div>
+          <!-- Slide 4 -->
+          <div class="swiper-slide">
+            <table class="slide-table" width="100%" align="center">
+                <tbody>
+                    <tr>
+                        <th colspan="2" width="90%" class="prompt_title" align="center">"A black swan"</th>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <video loop autoplay  muted width="95%"  class="result-video">
+                                <source src=".\videos\duck_black_swan_small.mp4" type="video/mp4">
+                            </video>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="45%">
+                            <div align="center" class="video-label-slides">Initial</div>
+                        </td>
+                        <td width="41%">
+                            <div align="center" class="video-label-slides">Edited&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+          </div>
+          <!-- Slide 5 -->
+          <div class="swiper-slide">
+            <table class="slide-table" width="100%" align="center">
+                <tbody>
+                    <tr>
+                        <th colspan="2" width="90%" class="prompt_title_local" align="center">"A cactus in a pot"</th>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <video loop autoplay  muted width="95%"  class="result-video">
+                                <source src=".\videos\ficus_cactus_small.mp4" type="video/mp4">
+                            </video>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="45%">
+                            <div align="center" class="video-label-slides">Initial</div>
+                        </td>
+                        <td width="41%">
+                            <div align="center" class="video-label-slides">Edited&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+          </div>
+
+        </div>
+        <!-- If we need pagination -->
+        <div class="swiper-pagination"></div>
+    
+        <!-- If we need navigation buttons -->
+        <div class="swiper-button-prev"></div>
+        <div class="swiper-button-next"></div>
+    </div>
+
+    <!-- intro -->
+    <section class="into-paragraph-section" width="100%">
+        <div class="intro-container has-text-justified">
+            <div class="intro-paragraph">
+                <p>
+                    Given multiview images of an object, our technique generates volumetric edits from target text prompts, allowing for 
+                    significant geometric and appearance changes, while faithfully preserving the input object. 
+                    The objects can be edited either globally or locally (local edits are emphasized in <span class="prompt_title_local">green</span>).
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- abstract -->
+    <section class="abstract-section" width="100%">
+        <div class="abstract-container has-text-justified">
+            <hr>
+            <h2 align="center">Abstract</h2>
+            <p class="has-text-justified">
+                Large scale text-guided diffusion models have garnered significant attention due to their ability to synthesize diverse images that convey complex visual concepts. 
+                This generative power has more recently been leveraged to perform text-to-3D synthesis. 
+                In this work, we present a technique that harnesses the power of latent diffusion models for editing existing 3D objects.
+                Our method takes oriented 2D images of a 3D object as input and learns a grid-based volumetric representation of it.
+                To guide the volumetric representation to conform to a target text prompt, we follow unconditional text-to-3D methods and optimize a Score Distillation Sampling (SDS) loss. 
+                However, we observe that combining this diffusion-guided loss with an image-based regularization loss that encourages the representation not to deviate too strongly from the input object
+                is challenging, as it requires achieving two conflicting goals while viewing only structure-and-appearance coupled 2D projections. 
+                Thus, we introduce a novel volumetric regularization loss that operates directly in 3D space, utilizing the explicit nature of our 3D representation to enforce correlation between the global structure of the original and edited object. 
+                Furthermore, we present a technique that optimizes cross-attention volumetric grids to refine the spatial extent of the edits.
+                Extensive experiments and comparisons demonstrate the effectiveness of our approach in creating a myriad of edits  which cannot be achieved by prior works.
+            </p>
+            <div class="swipe_vid_container" align="center" width="100%">
+                <video loop autoplay muted width="60%"  class="swipe_video">
+                    <source src=".\videos\swipe_mid_qual.mp4" type="video/mp4">
+                </video>
+            </div>
+        </div>
+    </section>
+
+    <!-- method -->
+    <section class="method-section" width="100%">
+        <div class="method-container">
+            <hr>
+            <h2 align="center">How does it work?</h2>
+            <div class="im_container has-text-justified" width="90%" align="center">
+                <img align="center" src="images/overview_official.png" alt="Overview" width="100%">
+            </div>            
+            <p class="has-text-justified">
+                Given a set of posed multi-view images of an object (for example a dog in the example above) we first model the 
+                scene as a voxel grid where each voxel contains learned features (denoted as the "Initial Feature Grid" above). 
+                We then perform text-guided object editing by carefully applying a score distillation loss on an edited voxel grid. 
+                Our key idea is to regularize this process in 3D space by encouraging similarity between the structure of the 
+                edited grid and the initial grid. To further refine the spatial extent of the edits, we introduce an (optional) 
+                refinement stage that utilizes 2D cross-attention maps which roughly capture regions associated with the target 
+                edit and lift them to volumetric grids. We then use these 3D cross-attention grids as a signal for a binary 
+                volumetric segmentation algorithm that splits the reconstructed volume into edited and non-edited regions, 
+                allowing for merging the features of the volumetric grids to better preserve regions that should not be affected 
+                by the textual edit.
+            </p>
+        <div class="attn-grid-vid-container">
+            
+        </div>
+        </div>
+    </section>
+
+    <!-- BibTex -->
+    <section class="bib-section" width="100%">
+        <div class="bib-container">
+            <hr>
+            <h2 align="center">BibTeX</h2>
+            <div class="code-container">
+                <code>
+                  @misc{sella2023voxe, <br>
+                    &emsp;  title={Vox-E: Text-guided Voxel Editing of 3D Objects}, <br>
+                    &emsp;  author={Etai Sella and Gal Fiebelman and Peter Hedman and Hadar Averbuch-Elor}, <br>
+                    &emsp;  year={2023}, <br>
+                    &emsp;  eprint={2303.12048}, <br>
+                    &emsp;  archivePrefix={arXiv}, <br>
+                    &emsp;  primaryClass={cs.CV} <br>
+                  }
+                </code>
+            </div> 
+        </div>
+    </section>
+
+    <!-- Acknowledgements -->
+    <!-- <section class="ack-section" width="100%"> -->
+    <!--     <div class="ack-container"> -->
+    <!--         <hr> -->
+    <!--         <h2 align="center">Acknowledgements</h2> -->
+    <!--         <p> -->
+    <!--             We would like to acknowledge such and such for this and that. -->
+    <!--         </p> -->
+    <!--     </div> -->
+    <!-- </section> -->
+
+  <p><br>
+  </p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+
+</div>
+<script>
+const swiper = new Swiper('.swiper', {
+    autoplay: {
+    delay: 4000,
+    },
+    // Optional parameters
+    speed: 1000,
+    loop: true,
+  
+    // If we need pagination
+    pagination: {
+      el: '.swiper-pagination',
+    },
+  
+    // Navigation arrows
+    navigation: {
+      nextEl: '.swiper-button-next',
+      prevEl: '.swiper-button-prev',
+    },
+  });
+</script>
+
+</body></html>

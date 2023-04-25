@@ -39,8 +39,8 @@ def visualize_and_log_attention_maps(attn_maps: tuple, global_step: int, log_fre
         wandb.log({"Diff Map": wandb.Image(attn_frame)}, step=global_step)
 
 
-def calc_loss_on_attn_grid(attn_render: Tensor, attn_map: Tensor, token: str,
-                           global_step: int, log_freq: int = 50):
+def calc_loss_on_attn_grid(attn_render: Tensor, attn_map: Tensor, token: str, 
+                           global_step: int, log_freq: int=50, log_wandb=False):
     cmp = cm.get_cmap('jet')
     attn_render = attn_render.reshape(attn_map.shape)
 
@@ -56,7 +56,7 @@ def calc_loss_on_attn_grid(attn_render: Tensor, attn_map: Tensor, token: str,
     diff_masked = diff * mask.float()
 
     # visualize mask
-    if (global_step % log_freq == 0) or (global_step == 0):
+    if ((global_step % log_freq == 0) or (global_step == 0)) and log_wandb:
         norm = colors.Normalize(vmin=0, vmax=torch.max(mask).item())
         mask_frame = cmp(norm(mask.cpu()))[:, :, :3]
         wandb.log({f"Mask {token}": wandb.Image(mask_frame)}, step=global_step)
@@ -246,7 +246,7 @@ def build_graph(features, densities, edit_attn, obj_attn, K=0.05, sigma=0.1, edi
             n_offset = torch.tensor(n_offset)
             # check for idxs outside grid
             if (((nidx + n_offset) >= x).sum() > 0) or \
-                    (((nidx + n_offset) >= y).sum() > 0) or (((nidx + n_offset) >= z).sum() > 0):
+                (((nidx + n_offset) >= y).sum() > 0) or (((nidx + n_offset) >= z).sum() > 0):
                 continue
             # check for negative idxs:
             if ((nidx + n_offset) < 0).sum() > 0:
@@ -279,16 +279,17 @@ def build_graph(features, densities, edit_attn, obj_attn, K=0.05, sigma=0.1, edi
     print(f"{(segments == 1).sum()} Voxels marked as Object")
     return segments, segment_idxs
 
-
-def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel,
-                                   vol_mod_object: VolumetricModel,
-                                   vol_mod_output: VolumetricModel,
-                                   rays: Rays,
-                                   img_height: int,
-                                   img_width: int,
-                                   ids: Tensor,
-                                   idxs: Tensor,
-                                   step: int = 0):
+def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel, 
+                                        vol_mod_object: VolumetricModel, 
+                                        vol_mod_output: VolumetricModel,
+                                        rays: Rays,
+                                        img_height: int,
+                                        img_width: int,
+                                        ids: Tensor,
+                                        idxs: Tensor,
+                                        step: int = 0,
+                                        log_wandb: bool = False):
+    
     # first visualize greater than grid:
     m = torch.nn.MaxPool3d(3, stride=1, padding=1)
 
@@ -308,7 +309,8 @@ def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel,
     # vis and log greater than attn map:
     norm = colors.Normalize(vmin=0, vmax=torch.max(attn_render).item())
     attn_frame = cmp(norm(attn_render.cpu()))[:, :, :3]
-    wandb.log({"GT Attn Map": wandb.Image(attn_frame)}, step=step)
+    if log_wandb:
+        wandb.log({"GT Attn Map": wandb.Image(attn_frame)}, step=step)
 
     # then visualize id based grid (graphcut output):
     gt_grid = torch.ones_like(vol_mod_edit.thre3d_repr.attn) * -20.0
@@ -324,7 +326,8 @@ def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel,
     # vis and log greater than attn map:
     norm = colors.Normalize(vmin=0, vmax=torch.max(attn_render).item())
     attn_frame = cmp(norm(attn_render.cpu()))[:, :, :3]
-    wandb.log({"GraphCut result Attn Map": wandb.Image(attn_frame)}, step=step)
+    if log_wandb:
+        wandb.log({"GraphCut result Attn Map": wandb.Image(attn_frame)}, step=step)
 
 
 def get_edit_region(vol_mod_edit: VolumetricModel,
