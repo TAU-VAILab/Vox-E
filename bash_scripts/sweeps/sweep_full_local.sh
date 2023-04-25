@@ -32,7 +32,6 @@ train_default() {
 	python render_sh_based_voxel_grid_attn.py \
 	-i logs/rf/${2}/${1}/${4}/saved_models/model_final_refined.pth \
 	-o output_renders/${2}/${1}/${4}/ \
-	--ref_path=logs/rf/${2}/${1}/ref/saved_models/model_final.pth \
 	--sds_prompt="$3" \
 	--save_freq=10
 }
@@ -40,24 +39,24 @@ train_default() {
 # STARTING RUN:
 
 sweep_name=sweep_full_local_extended
-scene=alien
-prompt="a render of an alien wearing a party hat"
+scene=dog1
+prompt="a render of a dog wearing a party hat"
 log_name="party_hat"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_local_extended
-scene=alien
-prompt="a render of an alien wearing a christmas sweater"
+scene=dog1
+prompt="a render of a dog wearing a christmas sweater"
 log_name="christmas"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_local_extended
-scene=alien
-prompt="a render of an alien wearing big sunglasses"
+scene=dog1
+prompt="a render of a dog wearing big sunglasses"
 log_name="sunglasses"
 eidx=8
 
