@@ -52,6 +52,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="sds prompt used for SDS based loss")
 @click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
               required=True, help="path to the input dataset")
+@click.option("-a", "--hf_auth_token", type=click.STRING, required=False, default="",
+              help="hugging face model token for stable diffusion 1.4",
+              show_default=True)
 @click.option("-eidx", "--edit_idx", type=click.INT, required=False, default=None,
               help="index of edit item, i.e. hat")
 @click.option("-oidx", "--object_idx", type=click.INT, required=False, default=None,
@@ -189,9 +192,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # -------------------------------------------------------------------------------------
 
 
-@click.option("--hf_auth_token", type=click.STRING, required=False, default="",
-              help="hugging face model token for stable diffusion 1.4",
-              show_default=True)
 @click.option("--kval", type=click.FLOAT, required=False, default=5.0,
               help="k value used in graphcut", show_default=True)
 @click.option("--edit_mask_thresh", type=click.FLOAT, required=False, default=0.992,

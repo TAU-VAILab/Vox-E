@@ -30,7 +30,7 @@ train_default() {
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
-	python render_sh_based_voxel_grid_attn.py \
+	python render_sh_based_voxel_grid.py \
 	-i logs/rf/${1}/${3}/saved_models/model_final_refined.pth \
 	-o output_renders/${1}/${3}/
 }

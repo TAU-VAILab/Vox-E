@@ -25,6 +25,9 @@ train_default() {
 	-p "$3" \
 	-eidx=${5} \
 	--do_refinement=False \
+	--log_wandb=True \
+	--learning_rate=0.028 \
+	--post_process_scc=True \
 	--sh_degree=0 # we currently only support diffuse
 
 	# Rendering Output Video:
@@ -59,29 +62,36 @@ train_default() {
 #prompt="a render of a grey claymation alien"
 #log_name="claymation"
 #eidx=8
-#
-#train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-#sweep_name=sweep_full_global_extended
-#scene=dog1
-#prompt="a render of a yarn doll of a white dog"
-#log_name="yarn"
-#eidx=9
-#
-#train_default $scene $sweep_name "$prompt" $log_name $eidx
-#
-#sweep_name=sweep_full_global_extended
-#scene=dog1
-#prompt="a render of a wood carving of a dog"
-#log_name="wood"
-#eidx=9
-#
-#train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_global_extended
-scene=alien
-prompt="a render of a white claymation alien"
-log_name="claymation"
-eidx=8
+sweep_name=sweep_full_global_extended_finer
+scene=cow
+prompt="a render of a yarn doll of a cow"
+log_name="yarn"
+eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_global_extended_finer
+scene=cow
+prompt="a render of a wood carving of a cow"
+log_name="wood"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_global_extended_finer
+scene=cow
+prompt="a render of a claymation cow"
+log_name="claymation"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+#sweep_name=sweep_full_global_extended
+#scene=alien
+#prompt="a render of a white claymation alien"
+#log_name="claymation"
+#eidx=8
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx

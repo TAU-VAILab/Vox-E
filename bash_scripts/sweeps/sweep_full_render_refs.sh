@@ -17,23 +17,10 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 
 # Rendering function template:
 train_default() {
-	# Train:
-	#python edit_pretrained_relu_field.py \
-	#-d ./data/${1}/ \
-	#-o logs/rf/${2}/${1}/${4} \
-	#-i logs/rf/${1}/ref/saved_models/model_final.pth \
-	#-p "$3" \
-	#-a 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 \
-	#-eidx=${5} \
-	#--do_refinement=True \
-	#--log_wandb=True \
-	#--learning_rate=0.028 \
-	#--sh_degree=0 # we currently only support diffuse
-
 	# Rendering Output Video:
 	echo "Starting Rendering..."
 	python render_sh_based_voxel_grid.py \
-	-i logs/rf/${2}/${1}/${4}/saved_models/model_final_refined.pth \
+	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-o output_renders/${2}/${1}/${4}/ \
 	--sds_prompt="$3" \
 	--save_freq=10
@@ -41,26 +28,50 @@ train_default() {
 
 # STARTING RUN:
 
-sweep_name=sweep_full_local_extended_finer
-scene=cow
-prompt="a render of a cow wearing a party hat"
-log_name="party_hat"
+sweep_name=sweep_full_local_extended
+scene=dog1
+prompt="a render of a dog"
+log_name="inputs"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_local_extended
-scene=cow
-prompt="a render of a cow wearing a christmas sweater"
-log_name="christmas"
+scene=cat2
+prompt="a render of a cat"
+log_name="inputs"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_local_extended
-scene=cow
-prompt="a render of a cow wearing big sunglasses"
-log_name="sunglasses"
-eidx=8
+scene=alien
+prompt="a render of an alien"
+log_name="inputs"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_global_extended
+scene=dog1
+prompt="a render of a dog"
+log_name="inputs"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_global_extended
+scene=cat2
+prompt="a render of a cat"
+log_name="inputs"
+eidx=9
+
+train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+sweep_name=sweep_full_global_extended
+scene=alien
+prompt="a render of an alien"
+log_name="inputs"
+eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx

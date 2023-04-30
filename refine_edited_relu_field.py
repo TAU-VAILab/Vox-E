@@ -105,7 +105,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of training iterations performed per stage", show_default=True)
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
-@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.025,
+@click.option("--learning_rate", type=click.FLOAT, required=False, default=0.028,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_decay_steps_per_stage", type=click.INT, required=False, default=5000 * 100,
               help="number of iterations after which lr is exponentially decayed per stage", show_default=True)

@@ -164,9 +164,9 @@ class StableDiffusion(nn.Module):
 
             # if self.max_step_ratio < self.min_step_ratio * 2:
 
-            if self.max_step_ratio < 0.31:
+            if self.max_step_ratio < 0.27:
                 #self.max_step_ratio = self.min_step_ratio * 2 # don't let it get too low!
-                self.max_step_ratio = 0.31 # don't let it get too low!
+                self.max_step_ratio = 0.27 # don't let it get too low!
             else:
                 print(f"Updating max step to {self.max_step_ratio}")
 
