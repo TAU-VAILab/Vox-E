@@ -64,25 +64,25 @@ train_default() {
 #eidx=8
 
 
-sweep_name=sweep_full_global_extended_finer
-scene=cow
-prompt="a render of a yarn doll of a cow"
+sweep_name=sweep_full_global_extended
+scene=horse_painted
+prompt="a render of a yarn doll of a horse"
 log_name="yarn"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_global_extended_finer
-scene=cow
-prompt="a render of a wood carving of a cow"
+sweep_name=sweep_full_global_extended
+scene=horse_painted
+prompt="a render of a wood carving of a horse"
 log_name="wood"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_global_extended_finer
-scene=cow
-prompt="a render of a claymation cow"
+sweep_name=sweep_full_global_extended
+scene=horse_painted
+prompt="a render of a claymation horse"
 log_name="claymation"
 eidx=9
 

@@ -18,17 +18,17 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 # Rendering function template:
 train_default() {
 	# Train:
-	#python edit_pretrained_relu_field.py \
-	#-d ./data/${1}/ \
-	#-o logs/rf/${2}/${1}/${4} \
-	#-i logs/rf/${1}/ref/saved_models/model_final.pth \
-	#-p "$3" \
-	#-a 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 \
-	#-eidx=${5} \
-	#--do_refinement=True \
-	#--log_wandb=True \
-	#--learning_rate=0.028 \
-	#--sh_degree=0 # we currently only support diffuse
+	python edit_pretrained_relu_field.py \
+	-d ./data/${1}/ \
+	-o logs/rf/${2}/${1}/${4} \
+	-i logs/rf/${1}/ref/saved_models/model_final.pth \
+	-p "$3" \
+	-a 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 \
+	-eidx=${5} \
+	--do_refinement=True \
+	--log_wandb=True \
+	--learning_rate=0.028 \
+	--sh_degree=0 # we currently only support diffuse
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
@@ -41,25 +41,25 @@ train_default() {
 
 # STARTING RUN:
 
-sweep_name=sweep_full_local_extended_finer
-scene=cow
-prompt="a render of a cow wearing a party hat"
+sweep_name=sweep_full_local_extended
+scene=horse_painted
+prompt="a render of a horse wearing a party hat"
 log_name="party_hat"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_local_extended
-scene=cow
-prompt="a render of a cow wearing a christmas sweater"
+scene=horse_painted
+prompt="a render of a horse wearing a christmas sweater"
 log_name="christmas"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_local_extended
-scene=cow
-prompt="a render of a cow wearing big sunglasses"
+scene=horse_painted
+prompt="a render of a horse wearing big sunglasses"
 log_name="sunglasses"
 eidx=8
 
