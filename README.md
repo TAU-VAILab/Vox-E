@@ -57,7 +57,7 @@ To run the global edit demo, run:
 
     bash bash_scripts/edit_demo_global.sh
 
-To run the local edit demo there is a requirement to add a Hugging Face authenticion token (instructions for how to get
+To run the local edit demo there is a requirement to add a Hugging Face authentication token (instructions for how to get
 the token can be found [here](https://huggingface.co/docs/hub/security-tokens)) run:
 
     bash bash_scripts/edit_demo_local.sh -a <Hugging Face authentication token>
