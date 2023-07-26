@@ -3,6 +3,7 @@
 This is the official pytorch implementation of Vox-E.
 
 [![arXiv](https://img.shields.io/badge/arXiv-2303.12048-b31b1b.svg)](https://arxiv.org/abs/2303.12048)
+![Generic badge](https://img.shields.io/badge/conf-ICCV2023-purple.svg)
 
 [[Project Website](https://tau-vailab.github.io/Vox-E/)]
 
@@ -32,11 +33,13 @@ This is the official pytorch implementation of Vox-E.
 </br>
 
 ## Getting the data
-Download "voxe_data.zip" from [here](https://drive.google.com/file/d/1h1X3NppS4V2PtCHg4gSCaZO93ZvFqnRO/view?usp=sharing) 
+For the synthetic scenes shown in the paper (and used in the demo) download "voxe_data.zip" from [here](https://drive.google.com/file/d/1h1X3NppS4V2PtCHg4gSCaZO93ZvFqnRO/view?usp=sharing) 
 and unzip in the repo folder. 
 </br>
-Note that in the paper and the project page we also showcase results on the NeRF dataset, which can be found 
-[here](https://drive.google.com/drive/u/0/folders/1-iJug5cTJA7bhDnhIxTraH5EyuyRA7sr).
+Other datasets shown in the paper include:
+- The synthetic NeRF dataset, which can be found [here](https://drive.google.com/drive/u/0/folders/1-iJug5cTJA7bhDnhIxTraH5EyuyRA7sr).
+- The NeRF 360 real-scenes, which can be found [here](https://drive.google.com/file/d/18hxar-OXpHA_SuX2pYsVkad0sltdK5GK/view?usp=sharing).
+
 
 </br>
 
@@ -54,7 +57,7 @@ To run the global edit demo, run:
 
     bash bash_scripts/edit_demo_global.sh
 
-To run the local edit demo there is a requirement to add a Hugging Face authenticion token (instructions for how to get
+To run the local edit demo there is a requirement to add a Hugging Face authentication token (instructions for how to get
 the token can be found [here](https://huggingface.co/docs/hub/security-tokens)) run:
 
     bash bash_scripts/edit_demo_local.sh -a <Hugging Face authentication token>
