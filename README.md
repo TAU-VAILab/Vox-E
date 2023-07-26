@@ -33,11 +33,13 @@ This is the official pytorch implementation of Vox-E.
 </br>
 
 ## Getting the data
-Download "voxe_data.zip" from [here](https://drive.google.com/file/d/1h1X3NppS4V2PtCHg4gSCaZO93ZvFqnRO/view?usp=sharing) 
+For the synthetic scenes shown in the paper (and used in the demo) download "voxe_data.zip" from [here](https://drive.google.com/file/d/1h1X3NppS4V2PtCHg4gSCaZO93ZvFqnRO/view?usp=sharing) 
 and unzip in the repo folder. 
 </br>
-Note that in the paper and the project page we also showcase results on the NeRF dataset, which can be found 
-[here](https://drive.google.com/drive/u/0/folders/1-iJug5cTJA7bhDnhIxTraH5EyuyRA7sr).
+Other datasets shown in the paper include:
+- The synthetic NeRF dataset, which can be found [here](https://drive.google.com/drive/u/0/folders/1-iJug5cTJA7bhDnhIxTraH5EyuyRA7sr).
+- The NeRF 360 real-scenes, which can be found [here](https://drive.google.com/file/d/18hxar-OXpHA_SuX2pYsVkad0sltdK5GK/view?usp=sharing).
+
 
 </br>
 
