@@ -23,17 +23,18 @@ train_default() {
 	-o logs/rf/${2}/${1}/${4} \
 	-i logs/rf/${1}/ref/saved_models/model_final.pth \
 	-p "$3" \
+	-a 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 \
 	-eidx=${5} \
-	--do_refinement=False \
+	--do_refinement=True \
 	--log_wandb=True \
+	--feature_correlation_weight=200.0 \
 	--learning_rate=0.028 \
-	--post_process_scc=False \
 	--sh_degree=0 # we currently only support diffuse
 
 	# Rendering Output Video:
 	echo "Starting Rendering..."
 	python render_sh_based_voxel_grid.py \
-	-i logs/rf/${2}/${1}/${4}/saved_models/model_final.pth \
+	-i logs/rf/${2}/${1}/${4}/saved_models/model_final_refined.pth \
 	-o output_renders/${2}/${1}/${4}/ \
 	--sds_prompt="$3" \
 	--save_freq=10
@@ -41,26 +42,28 @@ train_default() {
 
 # STARTING RUN:
 
-sweep_name=sweep_full_global_nofcl
+sweep_name=sweep_full_local_extended
 scene=dog2
-prompt="a render of a wood carving of a dog"
-log_name="wood"
+prompt="a render of a dog wearing a christmas sweater"
+log_name="christmas"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_global_nofcl
+sweep_name=sweep_full_local_extended
 scene=duck
-prompt="a render of a wood carving of a duck"
-log_name="wood"
+prompt="a render of a duck wearing a christmas sweater"
+log_name="christmas"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_global_nofcl
+sweep_name=sweep_full_local_extended
 scene=horse_painted
-prompt="a render of a wood carving of a horse"
-log_name="wood"
+prompt="a render of a horse wearing a christmas sweater"
+log_name="christmas"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+

@@ -42,9 +42,9 @@ train_default() {
 # STARTING RUN:
 
 sweep_name=sweep_full_local_extended
-scene=duck
-prompt="a render of a duck wearing a party hat"
-log_name="party_hat"
+scene=dog2
+prompt="a render of a dog wearing a christmas sweater"
+log_name="christmas"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
@@ -58,9 +58,11 @@ eidx=9
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_local_extended
-scene=duck
-prompt="a render of a duck wearing big sunglasses"
-log_name="sunglasses"
-eidx=8
+scene=horse_painted
+prompt="a render of a horse wearing a christmas sweater"
+log_name="christmas"
+eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
+
+

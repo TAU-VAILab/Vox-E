@@ -27,6 +27,7 @@ train_default() {
 	--do_refinement=False \
 	--log_wandb=True \
 	--learning_rate=0.028 \
+	--feature_correlation_weight=200.0 \
 	--post_process_scc=False \
 	--sh_degree=0 # we currently only support diffuse
 
@@ -41,7 +42,7 @@ train_default() {
 
 # STARTING RUN:
 
-sweep_name=sweep_full_global_nofcl
+sweep_name=sweep_full_global_fcl
 scene=dog2
 prompt="a render of a wood carving of a dog"
 log_name="wood"
@@ -49,7 +50,7 @@ eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_global_nofcl
+sweep_name=sweep_full_global_fcl
 scene=duck
 prompt="a render of a wood carving of a duck"
 log_name="wood"
@@ -57,7 +58,7 @@ eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
-sweep_name=sweep_full_global_nofcl
+sweep_name=sweep_full_global_fcl
 scene=horse_painted
 prompt="a render of a wood carving of a horse"
 log_name="wood"

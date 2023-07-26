@@ -19,7 +19,7 @@ export CUDA_VISIBLE_DEVICES=$gpu_num
 train_default() {
 	# Train:
 	echo "Starting Training..."
-	python train_sh_based_voxel_grid_with_posed_images.py -d ./data/${1}/ \
+	python train_sh_based_voxel_grid_with_posed_images.py -d ./nerf_360/${1}/ \
 	-o logs/rf/${1}/ref_real_200/ \
 	--fast_debug_mode=True \
 	--grid_dims=200 200 200 \
