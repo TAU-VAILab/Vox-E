@@ -19,7 +19,6 @@ h2 {
     margin-top: 30px;
     margin-bottom: 10px;
     font-weight: bold;
-    color: rgb(0, 0, 0);
 }
 
 h3 {
@@ -86,17 +85,30 @@ li {
     text-decoration: none;
  }
 
+.conference-block {
+	font-family: "Noto Sans", Arial;
+	margin-bottom: 10px;
+	color: rgb(0, 100, 200);
+    font-size: 23px;
+	font-weight: bold;
+}
+
+.conference-block a {
+    text-decoration: none;
+ }
+ 
 .author-block a:hover {
     text-decoration: underline;
 }
 
 .affiliations {
-    margin-top: 8px;
+    margin-top: 4px;
+	margin-bottom: 6px;
 }
 
 .publication-links{
     width: 100%;
-    margin-top: -15px;
+    margin-top: -20px;
 }
 
 .paper-link {
