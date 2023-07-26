@@ -3,6 +3,7 @@
 This is the official pytorch implementation of Vox-E.
 
 [![arXiv](https://img.shields.io/badge/arXiv-2303.12048-b31b1b.svg)](https://arxiv.org/abs/2303.12048)
+![Generic badge](https://img.shields.io/badge/conf-ICCV2023-purple.svg)
 
 [[Project Website](https://tau-vailab.github.io/Vox-E/)]
 
