@@ -458,8 +458,7 @@ def compute_max_attention_per_index(attention_maps: torch.Tensor,
             smoothing = GaussianSmoothing(channels=1, kernel_size=kernel_size, sigma=sigma, dim=2).cuda()
             input = F.pad(image.unsqueeze(0).unsqueeze(0), (1, 1, 1, 1), mode='reflect')
             image = smoothing(input).squeeze(0).squeeze(0)
-        scale_factor = np.min([orig_im_h / im_h, orig_im_w / im_w])
-        upscaled = nn.Upsample(scale_factor=scale_factor, mode='bilinear')(image.view(1, 1, im_h, im_w))[0][0]
+        upscaled = nn.Upsample(size=(orig_im_h, orig_im_w), mode='bilinear')(image.view(1, 1, im_h, im_w))[0][0]
         if smooth_attentions:
             u_input = F.pad(upscaled.unsqueeze(0).unsqueeze(0), (1, 1, 1, 1), mode='reflect')
             upscaled = smoothing(u_input).squeeze(0).squeeze(0)
@@ -468,7 +467,9 @@ def compute_max_attention_per_index(attention_maps: torch.Tensor,
 
 
 def aggregate_and_get_max_attention_per_token(prompts, attention_store: AttentionStore,
-                                              indices_to_alter: List[int], orig_im_h, orig_im_w,
+                                              indices_to_alter: List[int], 
+                                              orig_im_h: int, 
+                                              orig_im_w: int,
                                               attention_res: int = 16,
                                               smooth_attentions: bool = True,
                                               sigma: float = 0.5,

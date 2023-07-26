@@ -150,3 +150,6 @@ wandb/
 # ignore comparisons
 comparisons/
 
+# ignore bash script sweeps
+bash_scrips/sweeps/
+

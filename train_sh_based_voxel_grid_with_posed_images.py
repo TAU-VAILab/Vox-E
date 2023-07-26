@@ -83,6 +83,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--white_bkgd", type=click.BOOL, required=False, default=True,
               help="whether to use white background for training with synthetic (background-less) scenes :)",
               show_default=True)  # this option is also used in pre-processing the dataset
+@click.option("--linear_disparity_sampling", type=click.BOOL, required=False, default=False,
+              help="whether to use linear disparity sampling for rendering, good for real scenes", show_default=True)
+@click.option("--optimized_sampling", type=click.BOOL, required=False, default=False,
+              help="whether to use optimized sampling", show_default=True)
 
 # Training related arguments:
 @click.option("--ray_batch_size", type=click.INT, required=False, default=32768,
@@ -231,6 +235,8 @@ def main(**kwargs) -> None:
             white_bkgd=config.white_bkgd,
             render_num_samples_per_ray=config.render_num_samples_per_ray,
             parallel_rays_chunk_size=config.parallel_rays_chunk_size,
+            optimized_sampling=config.optimized_sampling,
+            linear_disparity_sampling=config.linear_disparity_sampling,
         ),
         device=device,
     )

@@ -28,50 +28,58 @@ train_default() {
 
 # STARTING RUN:
 
-sweep_name=sweep_full_local_extended
-scene=dog1
-prompt="a render of a dog"
-log_name="inputs"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local_extended
-scene=cat2
-prompt="a render of a cat"
-log_name="inputs"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_local_extended
-scene=alien
-prompt="a render of an alien"
-log_name="inputs"
+#sweep_name=sweep_full_local_extended
+#scene=dog1
+#prompt="a render of a dog"
+#log_name="inputs"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_local_extended
+#scene=cat2
+#prompt="a render of a cat"
+#log_name="inputs"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_local_extended
+#scene=alien
+#prompt="a render of an alien"
+#log_name="inputs"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_global_extended
+#scene=dog1
+#prompt="a render of a dog"
+#log_name="inputs"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+#sweep_name=sweep_full_global_extended
+#scene=cat2
+#prompt="a render of a cat"
+#log_name="inputs"
+#eidx=9
+#
+#train_default $scene $sweep_name "$prompt" $log_name $eidx
+#
+sweep_name=sweep_full_global_extended
+scene=duck
+prompt="a render of a duck"
+log_name="recon"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_global_extended
-scene=dog1
-prompt="a render of a dog"
-log_name="inputs"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_global_extended
-scene=cat2
-prompt="a render of a cat"
-log_name="inputs"
-eidx=9
-
-train_default $scene $sweep_name "$prompt" $log_name $eidx
-
-sweep_name=sweep_full_global_extended
-scene=alien
-prompt="a render of an alien"
-log_name="inputs"
+scene=horse_painted
+prompt="a render of a horse"
+log_name="recon"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx

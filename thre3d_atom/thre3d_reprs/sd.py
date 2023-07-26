@@ -101,6 +101,18 @@ class StableDiffusion(nn.Module):
 
         print(f'[INFO] loaded stable diffusion!')
 
+    def get_num_tokens(self, prompt):
+        # Tokenize text and get embeddings
+        text_input = self.tokenizer(prompt, padding='max_length', max_length=self.tokenizer.model_max_length, truncation=True, return_tensors='pt')
+        num_tokens = 0
+
+        for i in range(text_input['input_ids'][0].shape[0]):
+            if text_input['input_ids'][0][i] == 49407:
+                continue
+            num_tokens = num_tokens + 1
+
+        return num_tokens
+
     def get_max_step_ratio(self):
         return self.max_step_ratio
 
@@ -152,7 +164,9 @@ class StableDiffusion(nn.Module):
                 attn_maps = ca.aggregate_and_get_max_attention_per_token(
                     prompts=prompt,
                     attention_store=controller,
-                    indices_to_alter=indices_to_fetch, orig_im_h=orig_im_h, orig_im_w=orig_im_h
+                    indices_to_alter=indices_to_fetch, 
+                    orig_im_h=orig_im_h, 
+                    orig_im_w=orig_im_w
                 )
         return attn_maps, t.item()
 
@@ -164,9 +178,9 @@ class StableDiffusion(nn.Module):
 
             # if self.max_step_ratio < self.min_step_ratio * 2:
 
-            if self.max_step_ratio < 0.27:
+            if self.max_step_ratio < 0.22:
                 #self.max_step_ratio = self.min_step_ratio * 2 # don't let it get too low!
-                self.max_step_ratio = 0.27 # don't let it get too low!
+                self.max_step_ratio = 0.22 # don't let it get too low!
             else:
                 print(f"Updating max step to {self.max_step_ratio}")
 

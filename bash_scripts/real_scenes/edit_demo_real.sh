@@ -21,27 +21,40 @@ train_default() {
 	python edit_pretrained_relu_field.py \
 	-d ./data/${1}/ \
 	-o logs/rf/${1}/${3}/ \
-	-i logs/rf/${1}/ref/saved_models/model_final.pth \
+	-i logs/rf/${1}/ref_real_200/saved_models/model_final.pth \
 	-p "$2" \
-	-eidx ${4} \
+	-eidx "$4" \
 	--log_wandb=False \
 	--do_refinement=True \
+	--lr_freq=300 \
+	--lr_decay_start=2500 \
+	--lr_gamma=0.85 \
+	--num_iterations_edit=4000 \
+	--sds_t_start=2000 \
+	--learning_rate=0.005 \
+	--density_correlation_weight=60000.0 \
+	--data_pose_mode=True \
+    --downsample_refine_grid=True \
+	--edit_mask_thresh=1.0 \
+	--num_obj_voxels_thresh=40000 \
+	--top_k_edit_thresh=290 \
+	--top_k_obj_thresh=2500 \
 	--hf_auth_token=${5}
 
-	# Rendering Output Video:
+	# Rendering Output Video refined:
 	echo "Starting Rendering..."
 	python render_sh_based_voxel_grid_attn.py \
 	-i logs/rf/${1}/${3}/saved_models/model_final_refined.pth \
-	-o output_renders/${1}/${3}/
+	-o output_renders/${1}/${3}/ \
+	--save_freq=10
 }
 
 # STARTING RUN:
 
-scene=dog2
-prompt="a render of a dog with a party hat"
-log_name="party_hat"
-eidx=9
-oidx=5
+scene=pinecone
+prompt="a photo of a pineapple on the ground in a backyard"
+log_name="pineapple"
+eidx="5 6"
 hf_auth_token=$hf_auth_token_in
 
 train_default $scene "$prompt" $log_name $eidx $hf_auth_token

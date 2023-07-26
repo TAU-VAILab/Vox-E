@@ -94,9 +94,12 @@ def postprocess_depth_map(
     depth_map: np.array,
     acc_map: Optional[np.array] = None,
 ) -> np.array:
+    if len(depth_map.shape) == 3 and depth_map.shape[-1] == 1:
+        depth_map = np.squeeze(depth_map, axis=-1)
+        
     if acc_map is not None:
         # Note we only use the fg-depth's max value for a proper range
-        fg_depth_map = depth_map * acc_map
+        fg_depth_map = depth_map * np.squeeze(acc_map, axis=-1)
         depth_min, depth_max = depth_map.min(), fg_depth_map.max()
     else:
         depth_min, depth_max = depth_map.min(), depth_map.max()

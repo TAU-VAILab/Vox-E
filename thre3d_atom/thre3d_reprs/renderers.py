@@ -68,11 +68,13 @@ def render_sh_voxel_grid(
             sample_aabb_bound_uniform_points_on_rays,
             aabb=voxel_grid.aabb,
             perturb=render_config.perturb_sampled_points,
+            linear_disparity_sampling=render_config.linear_disparity_sampling,
         )
     else:
         sampler_function = partial(
             sample_uniform_points_on_rays,
             perturb=render_config.perturb_sampled_points,
+            linear_disparity_sampling=render_config.linear_disparity_sampling,
         )
     # prepare the processor_function
     point_processor_function = partial(
