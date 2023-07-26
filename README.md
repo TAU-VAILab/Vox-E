@@ -72,6 +72,20 @@ Global edit demo:
 
 </br>
 
+### 'Real-Scenes' demo
+We have also included a demo which edits a scene from ['360 real-scenes'](https://drive.google.com/file/d/18hxar-OXpHA_SuX2pYsVkad0sltdK5GK/view?usp=sharing). 
+After extracting the contents of the dataset zip file into the repo folder (resulting in a Vox-E/nerf_360/ folder structure), navigate to the repo folder and follow the steps below to run the demo:
+
+Reconstruct the Pinecone scene:
+
+	bash bash_scripts/real_scenes/train_default_relu_field_real.sh -d pinecone
+
+ Run the edit demo
+
+ 	bash bash_scripts/real_scenes/edit_demo_real.sh -a <Hugging Face authentication token>
+
+</br>
+
 ### Tested Configuration
 This code has been tested with Python 3.10.10, PyTorch 1.13.0, CUDA 11.4 on Ubuntu 20.04.5 LTS. </br>
 Execution (for the editing stage) takes around 50 minutes on an NVIDIA RTX A5000 GPU. 
