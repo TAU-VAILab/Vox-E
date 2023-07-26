@@ -2,7 +2,12 @@ from pathlib import Path
 import click
 import imageio
 import torch
+import os
 
+from thre3d_atom.data.datasets import PosedImagesDataset
+from torch.utils.data import DataLoader
+from thre3d_atom.data.utils import infinite_dataloader
+from thre3d_atom.utils.imaging_utils import CameraPose
 from thre3d_atom.modules.volumetric_model import (
     create_volumetric_model_from_saved_model,
 )
@@ -35,11 +40,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=False, help="path for saving rendered output")
 
 # Non-required Render configuration options:
+@click.option("-d", "--data_path", type=click.Path(file_okay=False, dir_okay=True),
+              required=False, help="path to the input dataset")
 @click.option("--overridden_num_samples_per_ray", type=click.IntRange(min=1), default=512,
               required=False, help="overridden (increased) num_samples_per_ray for beautiful renders :)")
 @click.option("--render_scale_factor", type=click.FLOAT, default=2.0,
               required=False, help="overridden (increased) resolution (again :D) for beautiful renders :)")
-@click.option("--camera_path", type=click.Choice(["thre360", "spiral"]), default="thre360",
+@click.option("--camera_path", type=click.Choice(["thre360", "spiral", "dataset"]), default="thre360",
               required=False, help="which camera path to use for rendering the animation")
 # thre360_path options
 @click.option("--camera_pitch", type=click.FLOAT, default=60.0,
@@ -122,6 +129,24 @@ def main(**kwargs) -> None:
             num_rounds=config.num_spiral_rounds,
             num_poses=num_frames,
         )
+    elif config.camera_path == "dataset":
+        print("using dataset poses!")
+        data_path = Path(config.data_path)
+        image_path = data_path / "train"
+        train_dataset = PosedImagesDataset(
+                images_dir=data_path / "train",
+                camera_params_json=data_path / f"train_camera_params.json",
+                normalize_scene_scale=False,
+                downsample_factor=1.0,
+                rgba_white_bkgd=vol_mod.render_config.white_bkgd,
+        )
+        num_frames = len(os.listdir(image_path))
+        train_dl = _make_dataloader_from_dataset(
+            train_dataset, num_frames, 4
+        )
+        infinite_train_dl = iter(infinite_dataloader(train_dl))
+        _, poses, _ = next(infinite_train_dl)
+        animation_poses = [CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]) for pose in poses]
     else:
         raise ValueError(
             f"Unknown camera_path ``{config.camera_path}'' requested."
@@ -144,6 +169,27 @@ def main(**kwargs) -> None:
         fps=config.fps,
     )
 
+def _make_dataloader_from_dataset(
+    dataset: PosedImagesDataset, batch_size: int, num_workers: int = 0
+) -> DataLoader:
+    # setup the data_loader:
+    # There are a bunch of fancy CPU-GPU configuration being done here.
+    # Nothing too hard to understand, just refer the documentation page of PyTorch's
+    # dataloader -> https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
+    # And, read the book titled "CUDA_BY_EXAMPLE" https://developer.nvidia.com/cuda-example
+    # Takes not long, just about 1-2 weeks :). But worth it :+1: :+1: :smile:!
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+        num_workers=0 if dataset.cached_data_mode else dataset,
+        pin_memory=not dataset.cached_data_mode and num_workers > 0,
+        prefetch_factor=num_workers
+        if not dataset.cached_data_mode and num_workers > 0
+        else 2,
+        persistent_workers=not dataset.cached_data_mode and num_workers > 0,
+    )
 
 if __name__ == "__main__":
     main()

@@ -47,9 +47,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               required=True, help="path for training output")
 @click.option("-r", "--ref_model_path", type=click.Path(file_okay=True, dir_okay=False),
               required=True, help="path to the pre-trained model")
+@click.option("-a", "--hf_auth_token", type=click.STRING, required=False, default="",
+              help="hugging face model token for stable diffusion 1.4",
+              show_default=True)
 @click.option("-p", "--prompt", type=click.STRING, required=True,
               help="prompt used for attention")
-@click.option("-eidx", "--edit_idx", type=click.INT, required=True,
+@click.option("-eidx", "--edit_idx", required=True, type=click.STRING, 
               help="index of edit item, i.e. hat")
 @click.option("-oidx", "--object_idx", type=click.INT, required=False, default=None,
               help="index of object, i.e. cat")
@@ -60,7 +63,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               default=True, help="whether the data directory has separate train and test folders",
               show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
-              default=4.0, help="downscale factor for the input images if needed."
+              default=3.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
 # Voxel-grid related arguments:
 @click.option("--grid_dims", type=click.INT, nargs=3, required=False, default=(160, 160, 160),
@@ -95,7 +98,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)  # this option is also used in pre-processing the dataset
 
 # Training related arguments:
-@click.option("--ray_batch_size", type=click.INT, required=False, default=65536,
+@click.option("--ray_batch_size", type=click.INT, required=False, default=84672,
               help="number of randomly sampled rays used per training iteration", show_default=True)
 @click.option("--train_num_samples_per_ray", type=click.INT, required=False, default=256,
               help="number of samples taken per ray during training", show_default=True)
@@ -126,7 +129,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="number of iterations after which a model is saved", show_default=True)
 @click.option("--test_frequency", type=click.INT, required=False, default=250,
               help="number of iterations after which test metrics are computed", show_default=True)
-@click.option("--feedback_frequency", type=click.INT, required=False, default=1000,
+@click.option("--feedback_frequency", type=click.INT, required=False, default=200,
               help="number of iterations after which rendered feedback is generated", show_default=True)
 @click.option("--summary_frequency", type=click.INT, required=False, default=50,
               help="number of iterations after which training-loss/other-summaries are logged", show_default=True)
@@ -134,14 +137,31 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--verbose_rendering", type=click.BOOL, required=False, default=False,
               help="whether to show progress while rendering feedback during training"
                    "can be turned-off when running on server-farms :D", show_default=True)
+@click.option("--data_pose_mode", type=click.BOOL, required=False, default=False,
+              help="uses poses from a given dataset instead of random sampling",
+               show_default=True)
+
 # sds specific stuff
 @click.option("--directional_dataset", type=click.BOOL, required=False, default=True,
               help="whether to use a directional dataset for SDS where each view comes with a direction",
+              show_default=True)
+@click.option("--downsample_refine_grid", type=click.BOOL, required=False, default=False,
+              help="whether to downsample the attn grid when refining (good for real scenes)",
               show_default=True)
 @click.option("--attn_tv_weight", type=click.FLOAT, required=False, default=0.01,
               help="value of gamma for exponential lr_decay (happens per stage)", show_default=True)
 @click.option("--kval", type=click.FLOAT, required=False, default=5.0,
               help="k value used in graphcut", show_default=True)
+@click.option("--edit_mask_thresh", type=click.FLOAT, required=False, default=0.992,
+              help="probability threshold for edit voxels in graph cut stage", show_default=True)
+@click.option("--num_obj_voxels_thresh", type=click.INT, required=False, default=5000,
+              help="number of voxels to mark as object in graph cut stage", show_default=True)
+@click.option("--min_num_edit_voxels", type=click.INT, required=False, default=300,
+              help="minimum number of voxels to mark as edit in graph cut stage", show_default=True)
+@click.option("--top_k_edit_thresh", type=click.INT, required=False, default=300,
+              help="number of voxels to mark as edit in graph cut stage if less than minimum reached", show_default=True)
+@click.option("--top_k_obj_thresh", type=click.INT, required=False, default=200,
+              help="number of voxels to mark as object in graph cut stage if less than minimum reached", show_default=True)
 
 # wandb stuff
 @click.option("--log_wandb", type=click.BOOL, required=False, default=False,
@@ -152,35 +172,37 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--wandb_project_name", type=click.STRING, required=False, default="Vox-E-refine",
               help="sds prompt used for SDS based loss", show_default=True)
 
+
 # fmt: on
 # -------------------------------------------------------------------------------------
 def main(**kwargs) -> None:
     # load the requested configuration for the training
     config = EasyDict(kwargs)
 
+    # set wandb login info if required:
     if config.log_wandb:
         wandb.init(project=config.wandb_project_name, entity=config.wandb_username,
                    config=dict(config), name="test " + str(datetime.now()),
                    id=wandb.util.generate_id())
-    
+
     # parse os-checked path-strings into Pathlike Paths :)
-    data_path = Path(config.data_path)
-    model_path = Path(config.sds_model_path)
+    sds_model_path = Path(config.sds_model_path)
+    ref_model_path = Path(config.ref_model_path)
     output_path = Path(config.output_path)
-    ref_path = Path(config.ref_model_path)
 
     # save a copy of the configuration for reference
     log.info("logging configuration file ...")
     log_config_to_disk(config, output_path)
 
+    data_path = Path(config.data_path)
     if config.separate_train_test_folders:
         train_dataset = PosedImagesDataset(
-                images_dir=data_path / 'train',
+                images_dir=data_path / "train",
                 camera_params_json=data_path / f"train_camera_params.json",
                 normalize_scene_scale=config.normalize_scene_scale,
                 downsample_factor=config.data_downsample_factor,
                 rgba_white_bkgd=config.white_bkgd,
-            )
+        )
     else:
         train_dataset = PosedImagesDataset(
             images_dir=data_path / "images",
@@ -189,62 +211,72 @@ def main(**kwargs) -> None:
             downsample_factor=config.data_downsample_factor,
             rgba_white_bkgd=config.white_bkgd,
         )
+    
+    # set up image dims
+    im_h = train_dataset._camera_intrinsics.height
+    im_w = train_dataset._camera_intrinsics.width
+    image_dims = (im_h, im_w)
 
     pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
-        model_path=ref_path,
+        model_path=ref_model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
         device=device,
     )
 
     vol_mod_edit, _ = create_volumetric_model_from_saved_model_attn(
-        model_path=model_path,
-        thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
-        device=device,
-    )
+            model_path=sds_model_path,
+            thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
+            device=device,
+        )
 
     vol_mod_obj, _ = create_volumetric_model_from_saved_model_attn(
-        model_path=model_path,
+        model_path=sds_model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
         device=device,
     )
 
-    vol_mod_output, _ = create_volumetric_model_from_saved_model_attn(
-        model_path=model_path,
+    sds_vol_mod, _ = create_volumetric_model_from_saved_model_attn(
+        model_path=sds_model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict_attn,
         device=device,
     )
+
+    # convert space separated string to list of ints
+    edit_idx = [int(i) for i in config.edit_idx.split()]
 
     # train the model:
     refine_edited_relu_field(
-        vol_mod_edit=vol_mod_edit,
-        vol_mod_object=vol_mod_obj,
-        vol_mod_ref=pretrained_vol_mod,
-        vol_mod_output=vol_mod_output,
-        train_dataset=train_dataset,
-        output_dir=output_path,
-        prompt=config.prompt,
-        edit_idx=config.edit_idx,
-        object_idx=config.object_idx,
-        timestamp=config.timestamp,
-        ray_batch_size=config.ray_batch_size,
-        num_stages=config.num_stages,
-        num_iterations=config.num_iterations_per_stage,
-        scale_factor=config.scale_factor,
-        learning_rate=config.learning_rate,
-        lr_decay_gamma_per_stage=config.lr_decay_gamma_per_stage,
-        lr_decay_steps_per_stage=config.lr_decay_steps_per_stage,
-        stagewise_lr_decay_gamma=config.stagewise_lr_decay_gamma,
-        save_freq=config.save_frequency,
-        feedback_freq=config.feedback_frequency,
-        summary_freq=config.summary_frequency,
-        apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,
-        num_workers=config.num_workers,
-        verbose_rendering=config.verbose_rendering,
-        directional_dataset=config.directional_dataset,
-        attn_tv_weight=config.attn_tv_weight,
-        kval=config.kval,
-        log_wandb=config.log_wandb,
-    )
+            vol_mod_edit=vol_mod_edit,
+            vol_mod_object=vol_mod_obj,
+            vol_mod_ref=pretrained_vol_mod,
+            vol_mod_output=sds_vol_mod,
+            train_dataset=train_dataset,
+            hf_auth_token=config.hf_auth_token,
+            output_dir=output_path,
+            prompt=config.prompt,
+            edit_idx=edit_idx,
+            object_idx=config.object_idx,
+            timestamp=config.timestamp,
+            image_dims=image_dims,
+            ray_batch_size=config.ray_batch_size,
+            num_iterations=config.num_iterations_per_stage,
+            learning_rate=config.learning_rate,
+            save_freq=config.save_frequency,
+            feedback_freq=config.feedback_frequency,
+            summary_freq=config.summary_frequency,
+            apply_diffuse_render_regularization=config.apply_diffuse_render_regularization,
+            verbose_rendering=config.verbose_rendering,
+            attn_tv_weight=config.attn_tv_weight,
+            kval=config.kval,
+            edit_mask_thresh=config.edit_mask_thresh,
+            num_obj_voxels_thresh=config.num_obj_voxels_thresh,
+            min_num_edit_voxels=config.min_num_edit_voxels,
+            top_k_edit_thresh=config.top_k_edit_thresh,
+            top_k_obj_thresh=config.top_k_obj_thresh,
+            log_wandb=config.log_wandb,
+            data_pose_mode=config.data_pose_mode,
+            downsample_refine_grid=config.downsample_refine_grid,
+        )
 
 
 if __name__ == "__main__":

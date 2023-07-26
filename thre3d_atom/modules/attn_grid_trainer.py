@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import imageio
+import cv2
 import torch
 import numpy as np
 from torch import Tensor
@@ -15,6 +16,8 @@ from thre3d_atom.data.utils import infinite_dataloader
 from thre3d_atom.modules.volumetric_model import VolumetricModel
 from thre3d_atom.rendering.volumetric.utils.misc import (
     cast_rays,
+    collate_rays_unflattened,
+    sample_rays_and_pixels_synchronously,
     flatten_rays,
 )
 
@@ -70,14 +73,19 @@ def refine_edited_relu_field(
         edit_idx: int,
         timestamp: int,
         image_dims: tuple,
+        image_batch_cache_size: int = 8,
+        num_workers: int = 4,
         object_idx: int = None,
         num_iterations: int = 2000,
+        ray_batch_size: int = 32768,
+        scale_factor: float = 2.0,
         # learning_rate and related arguments
         learning_rate: float = 0.03,
         lr_decay_gamma_per_stage: float = 0.1,
         lr_decay_steps_per_stage: int = 2000,
         # option to have a specific feedback_pose_for_visual feedback rendering
         render_feedback_pose: Optional[CameraPose] = None,
+        data_pose_mode: bool = False,
         # various training-loop frequencies
         save_freq: int = 1000,
         feedback_freq: int = 100,
@@ -94,6 +102,7 @@ def refine_edited_relu_field(
         top_k_edit_thresh: int = 300,
         top_k_obj_thresh: int = 200,
         log_wandb: bool = False,
+        downsample_refine_grid: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -168,6 +177,19 @@ def refine_edited_relu_field(
         train_dataset.camera_intrinsics,
     )
 
+    if data_pose_mode:
+        stagewise_train_datasets = [train_dataset]
+        dataset_config_dict = train_dataset.get_config_dict()
+        data_downsample_factor = dataset_config_dict["downsample_factor"]
+        dataset_config_dict.update(
+            {"downsample_factor": data_downsample_factor * scale_factor}
+        )
+        stagewise_train_datasets.insert(0, PosedImagesDataset(**dataset_config_dict))
+        train_dl = _make_dataloader_from_dataset(
+            train_dataset, image_batch_cache_size, num_workers
+        )
+        infinite_train_dl = iter(infinite_dataloader(train_dl))
+
     # start actual training
     log.info("beginning training")
     time_spent_actually_training = 0
@@ -228,14 +250,38 @@ def refine_edited_relu_field(
         #  Get Input Pose:  |
         # -------------------
 
-        pose, dir, _, _ = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
-        unflattened_rays = cast_rays(
-                    train_dataset.camera_intrinsics,
-                    pose,
-                    device=vol_mod_edit.device,
+        if data_pose_mode:
+            batch_size_in_images = int(ray_batch_size / (im_h * im_w))
+            images, poses, indices = next(infinite_train_dl)
+            # cast rays for all the loaded images:
+            rays_list = []
+            unflattened_rays_list = []
+            for pose in poses:
+                unflattened_rays = cast_rays(
+                        train_dataset.camera_intrinsics,
+                        CameraPose(rotation=pose[:, :3], translation=pose[:, 3:]),
+                        device=vol_mod_output.device,
+                    )
+                casted_rays = flatten_rays(unflattened_rays)
+                rays_list.append(casted_rays)
+                unflattened_rays_list.append(unflattened_rays)
+            unflattened_rays = collate_rays_unflattened(unflattened_rays_list)
+            # images are of shape [B x C x H x W] and pixels are [B * H * W x C]
+            rays_batch, _, _, selected_idx_in_batch = sample_rays_and_pixels_synchronously(
+                    unflattened_rays, images, indices, batch_size_in_images
                 )
-        rays_batch = flatten_rays(unflattened_rays)
-        direction_batch = [dir]
+            direction_batch = _get_dir_batch_from_poses(poses[selected_idx_in_batch])
+            selected_pose = poses[selected_idx_in_batch][0]
+            pose = CameraPose(rotation=selected_pose[:, :3], translation=selected_pose[:, 3:])
+        else:
+            pose, dir, _, _ = get_random_pose(HEMISPHERICAL_RADIUS_CONSTANT)
+            unflattened_rays = cast_rays(
+                        train_dataset.camera_intrinsics,
+                        pose,
+                        device=vol_mod_output.device,
+                    )
+            rays_batch = flatten_rays(unflattened_rays)
+            direction_batch = [dir]
 
         # ----------------------
         #  Render RGB Output:  |
@@ -257,23 +303,30 @@ def refine_edited_relu_field(
         m_prompt = prompt + f", {direction_batch[0]} view"
 
         # if no object idx is given (default) take the maximum between all non-edit tokens
-        if object_idx == None:
-            indices_to_fetch = list(range(1, edit_idx + 1))
-        else:
-            indices_to_fetch = [edit_idx, object_idx]
+        num_text_embeddings = sd_model.get_num_tokens(m_prompt)
+        indices_to_fetch = list(range(1, num_text_embeddings + 1))
+
 
         gt, _ = sd_model.get_attn_map(prompt=m_prompt, pred_rgb=out_imgs, timestamp=timestamp,
                                       indices_to_fetch=indices_to_fetch)
 
+    #if isinstance(edit_idx, (list, tuple)):
+        edit_attn_maps = [gt[idx - 1].unsqueeze(dim=-1) for idx in edit_idx]
+        edit_attn_map = torch.cat(edit_attn_maps, dim=-1)
+        edit_attn_map, _ = torch.max(edit_attn_map, dim=-1)
+        edit_attn_map = edit_attn_map.squeeze()
+        non_edit_maps = [gt[idx - 1] for idx in range(1, num_text_embeddings + 1) if idx not in edit_idx]
+        #else:
+        #    edit_attn_map = gt[edit_idx - 1]
+        #    non_edit_maps = [gt[idx - 1] for idx in range(1, num_text_embeddings + 1) if idx != edit_idx]
+
         if object_idx == None:
-            edit_attn_map = gt.pop(edit_idx - 1)
-            rest_of_attn_maps = [t.unsqueeze(dim=-1) for t in gt]
+            rest_of_attn_maps = [t.unsqueeze(dim=-1) for t in non_edit_maps]
             object_attn_map = torch.cat(rest_of_attn_maps, dim=-1)
             object_attn_map, _ = torch.max(object_attn_map, dim=-1)
             object_attn_map = object_attn_map.squeeze()
         else:
-            edit_attn_map = gt[0]
-            object_attn_map = gt[1]
+            object_attn_map = gt[object_idx - 1]
 
         # -------------------------------------
         #  Get Attention Outputs from grids:  |
@@ -383,6 +436,41 @@ def refine_edited_relu_field(
                 if not feedback_pose_given:
                     render_feedback_pose = pose
 
+                # visualize attention maps with jet colormap:
+                # TODO - move this to a function
+                edit_attn_save_path = render_dir / f"edit_gt_attn_{global_step}.png"
+                max = edit_attn_map.cpu().numpy().max()
+                min = edit_attn_map.cpu().numpy().min()
+                edit_gt_attn_img = (edit_attn_map.cpu().numpy() - min) / (max - min)
+                edit_gt_attn_img = np.uint8(255 * edit_gt_attn_img)
+                edit_gt_attn_img = cv2.applyColorMap(edit_gt_attn_img, cv2.COLORMAP_JET)
+                cv2.imwrite(str(edit_attn_save_path), edit_gt_attn_img)
+
+                object_attn_save_path = render_dir / f"object_gt_attn_{global_step}.png"
+                max = object_attn_map.cpu().numpy().max()
+                min = object_attn_map.cpu().numpy().min()
+                object_gt_attn_img = (object_attn_map.cpu().numpy() - min) / (max - min)
+                object_gt_attn_img = np.uint8(255 * object_gt_attn_img)
+                object_gt_attn_img = cv2.applyColorMap(object_gt_attn_img, cv2.COLORMAP_JET)
+                cv2.imwrite(str(object_attn_save_path), object_gt_attn_img)
+
+                edit_render_attn_save_path = render_dir / f"edit_render_attn_{global_step}.png"
+                max = edit_attn_render.cpu().numpy().max()
+                min = edit_attn_render.cpu().numpy().min()
+                edit_render_attn_img = (edit_attn_render.cpu().numpy() - min) / (max - min)
+                edit_render_attn_img = np.uint8(255 * edit_render_attn_img)
+                edit_render_attn_img = cv2.applyColorMap(edit_render_attn_img, cv2.COLORMAP_JET)
+                cv2.imwrite(str(edit_render_attn_save_path), edit_render_attn_img)
+
+                object__render_attn_save_path = render_dir / f"object_render_attn_{global_step}.png"
+                max = object_attn_render.cpu().numpy().max()
+                min = object_attn_render.cpu().numpy().min()
+                object_render_attn_img = (object_attn_render.cpu().numpy() - min) / (max - min)
+                object_render_attn_img = np.uint8(255 * object_render_attn_img)
+                object_render_attn_img = cv2.applyColorMap(object_render_attn_img, cv2.COLORMAP_JET)
+                cv2.imwrite(str(object__render_attn_save_path), object_render_attn_img)
+
+                # visualize attn rendered from grid:
                 visualize_sh_vox_grid_vol_mod_rendered_feedback_attn(
                     vol_mod=vol_mod_edit,
                     vol_mod_name="attn",
@@ -441,13 +529,12 @@ def refine_edited_relu_field(
     get_edit_region(vol_mod_edit=vol_mod_edit,
                     vol_mod_object=vol_mod_object,
                     vol_mod_output=vol_mod_output,
-                    rays=rays_batch,
-                    img_height=im_h,
-                    img_width=im_w,
-                    step=global_step,
                     K=kval, edit_mask_thresh=edit_mask_thresh,
-                    num_obj_voxels_thresh=num_obj_voxels_thresh, min_num_edit_voxels=min_num_edit_voxels,
-                    top_k_edit_thresh=top_k_edit_thresh, top_k_obj_thresh=top_k_obj_thresh)
+                    num_obj_voxels_thresh=num_obj_voxels_thresh, 
+                    min_num_edit_voxels=min_num_edit_voxels,
+                    top_k_edit_thresh=top_k_edit_thresh, 
+                    top_k_obj_thresh=top_k_obj_thresh,
+                    downsample_grid=downsample_refine_grid)
 
     # change densities and features without optimization:
     regular_density = vol_mod_ref.thre3d_repr._densities.detach()
@@ -461,6 +548,22 @@ def refine_edited_relu_field(
     new_features = vol_mod_output.thre3d_repr.features.detach()
     new_features[keep_mask.squeeze()] = regular_features[keep_mask.squeeze()]
     vol_mod_output.thre3d_repr._features = torch.nn.Parameter(new_features)
+
+    visualize_sh_vox_grid_vol_mod_rendered_feedback_attn(
+                    vol_mod=vol_mod_output,
+                    vol_mod_name="attn_final",
+                    render_feedback_pose=render_feedback_pose,
+                    camera_intrinsics=camera_intrinsics,
+                    global_step=0,
+                    feedback_logs_dir=render_dir,
+                    parallel_rays_chunk_size=vol_mod_edit.render_config.parallel_rays_chunk_size,
+                    training_time=time_spent_actually_training,
+                    log_diffuse_rendered_version=apply_diffuse_render_regularization,
+                    use_optimized_sampling_mode=False,  # testing how the optimized sampling mode rendering looks 🙂
+                    overridden_num_samples_per_ray=vol_mod_edit.render_config.render_num_samples_per_ray,
+                    verbose_rendering=verbose_rendering,
+                    log_wandb=log_wandb,
+                )
 
     visualize_sh_vox_grid_vol_mod_rendered_feedback(
         vol_mod=vol_mod_output,
@@ -477,7 +580,7 @@ def refine_edited_relu_field(
         verbose_rendering=verbose_rendering,
         log_wandb=log_wandb,
     )
-    vol_mod_output.thre3d_repr.attn = None
+    #vol_mod_output.thre3d_repr.attn = None
 
     # ------------------------
     #  Save model and exit:  |
@@ -558,3 +661,45 @@ def _tv_loss_on_grid(grid: Tensor):
     tv1 = grid.diff(dim=1).abs()
     tv2 = grid.diff(dim=2).abs()
     return (tv0.mean() + tv1.mean() + tv2.mean()) / 3
+
+
+def _get_dir_batch_from_poses(poses: Tensor):
+    dir_batch = []
+    num_poses = poses.shape[0]
+    for i in range(num_poses):
+        Rt = poses[i]
+        pitch, yaw = _pitch_yaw_from_Rt(Rt)
+        # determine view direction according to pitch, yaw
+        dir = 'front'
+        if yaw > 45.0:
+            dir = 'side'
+        if yaw > 120.0:
+            dir = 'back'
+        if pitch > 55.0:
+            dir = 'overhead'      
+        dir_batch.append(dir)
+    return dir_batch
+
+
+def _make_dataloader_from_dataset(
+    dataset: PosedImagesDataset, batch_size: int, num_workers: int = 0
+) -> DataLoader:
+    # setup the data_loader:
+    # There are a bunch of fancy CPU-GPU configuration being done here.
+    # Nothing too hard to understand, just refer the documentation page of PyTorch's
+    # dataloader -> https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
+    # And, read the book titled "CUDA_BY_EXAMPLE" https://developer.nvidia.com/cuda-example
+    # Takes not long, just about 1-2 weeks :). But worth it :+1: :+1: :smile:!
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+        num_workers=0 if dataset.cached_data_mode else dataset,
+        pin_memory=not dataset.cached_data_mode and num_workers > 0,
+        prefetch_factor=num_workers
+        if not dataset.cached_data_mode and num_workers > 0
+        else 2,
+        persistent_workers=not dataset.cached_data_mode and num_workers > 0,
+    )
+

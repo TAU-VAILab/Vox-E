@@ -86,6 +86,8 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
     data_pose_mode: bool = False,
     uncoupled_l2_mode: bool = False,
     log_wandb: bool = False,
+    l2_mode: bool = False,
+    l1_mode: bool = False,
 ) -> VolumetricModel:
     """
     ------------------------------------------------------------------------------------------------------
@@ -299,15 +301,12 @@ def train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
                 specular_loss = l1_loss(specular_rendered_pixels_batch_sds, pixels_batch)
             total_loss = total_loss + specular_loss * density_correlation_weight
         else:
-            ### insert losses that tie them together here ###
-            density_correlation_loss, cov_grid = _density_correlation_loss(sds_density=sds_density,
-                                                                 regular_density=regular_density)
+
+            density_correlation_loss, cov_grid = density_correlation_loss_fn(sds_density=sds_density,
+                                                                 regular_density=regular_density,
+                                                                 l2_mode=l2_mode,
+                                                                 l1_mode=l1_mode)
             total_loss = total_loss + density_correlation_loss * density_correlation_weight
-        
-        ### insert losses that tie them together here ###
-        density_correlation_loss, cov_grid = _density_correlation_loss(sds_density=sds_density,
-                                                             regular_density=regular_density)
-        total_loss = total_loss + density_correlation_loss * density_correlation_weight
         
         if feature_correlation_weight > 0.0:
             feature_correlation_loss = _feature_correlation_loss(sds_features=sds_features,
@@ -491,6 +490,19 @@ def _make_dataloader_from_dataset(
         else 2,
         persistent_workers=not dataset.cached_data_mode and num_workers > 0,
     )
+
+def density_correlation_loss_fn(sds_density: Tensor,
+                              regular_density: Tensor,
+                              l2_mode: bool=False,
+                              l1_mode: bool=False):
+    if l2_mode:
+        criterion = mse_loss
+        return criterion(sds_density.permute((-1, 0, 1, 2)), regular_density.permute((-1, 0, 1, 2))), None
+    elif l1_mode:
+        criterion = l1_loss
+        return criterion(sds_density.permute((-1, 0, 1, 2)), regular_density.permute((-1, 0, 1, 2))), None
+    else:
+        return _density_correlation_loss(sds_density, regular_density)
 
 def _density_correlation_loss(sds_density: Tensor,
                               regular_density: Tensor):

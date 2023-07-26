@@ -65,24 +65,24 @@ train_default() {
 
 
 sweep_name=sweep_full_global_extended
-scene=horse_painted
-prompt="a render of a yarn doll of a horse"
+scene=duck
+prompt="a render of a yarn doll of a duck"
 log_name="yarn"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_global_extended
-scene=horse_painted
-prompt="a render of a wood carving of a horse"
+scene=duck
+prompt="a render of a wood carving of a duck"
 log_name="wood"
 eidx=9
 
 train_default $scene $sweep_name "$prompt" $log_name $eidx
 
 sweep_name=sweep_full_global_extended
-scene=horse_painted
-prompt="a render of a claymation horse"
+scene=duck
+prompt="a render of a claymation duck"
 log_name="claymation"
 eidx=9
 

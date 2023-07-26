@@ -55,7 +55,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("-a", "--hf_auth_token", type=click.STRING, required=False, default="",
               help="hugging face model token for stable diffusion 1.4",
               show_default=True)
-@click.option("-eidx", "--edit_idx", type=click.INT, required=False, default=None,
+@click.option("-eidx", "--edit_idx", type=click.STRING, required=False, default=None,
               help="index of edit item, i.e. hat")
 @click.option("-oidx", "--object_idx", type=click.INT, required=False, default=None,
               help="index of object, i.e. cat")
@@ -67,8 +67,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--separate_train_test_folders", type=click.BOOL, required=False,
               default=True, help="whether the data directory has separate train and test folders", 
               show_default=True)
-@click.option("--image_dims", type=click.INT, nargs=2, required=False, default=(266, 266),
-              help="dimensions (#pixel width and height) of the rendered images", show_default=True)
 @click.option("--data_downsample_factor", type=click.FloatRange(min=1.0), required=False,
               default=3.0, help="downscale factor for the input images if needed."
                                 "Note the default, for training NeRF-based scenes", show_default=True)
@@ -108,7 +106,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               show_default=True)  # this option is also used in pre-processing the dataset
 
 # Training related arguments:
-@click.option("--ray_batch_size", type=click.INT, required=False, default=65536 * 1.25,
+@click.option("--ray_batch_size", type=click.INT, required=False, default=84672,
               help="number of randomly sampled rays used per training iteration", show_default=True)
 @click.option("--train_num_samples_per_ray", type=click.INT, required=False, default=256,
               help="number of samples taken per ray during training", show_default=True)
@@ -117,6 +115,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--scale_factor", type=click.FLOAT, required=False, default=2.0,
               help="factor by which the grid is up-scaled after each stage", show_default=True)
 @click.option("--learning_rate", type=click.FLOAT, required=False, default=0.03,
+              help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
+@click.option("--learning_rate_attn_learning", type=click.FLOAT, required=False, default=0.035,
               help="learning rate used at the beginning (ADAM OPTIMIZER)", show_default=True)
 @click.option("--lr_freq", type=click.INT, required=False, default=400,
               help="frequency in which to reduce learning rate", show_default=True)
@@ -163,6 +163,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @click.option("--do_sds", type=click.BOOL, required=False, default=True,
               help="whether to use an uncertainty aware type loss",
                show_default=True)
+@click.option("--downsample_refine_grid", type=click.BOOL, required=False, default=False,
+              help="whether to downsample the attn grid when refining (good for real scenes)",
+              show_default=True)
 @click.option("--new_frame_frequency", type=click.INT, required=False, default=1,
               help="number of iterations where we work on the same pose", show_default=True)
 @click.option("--density_correlation_weight", type=click.FLOAT, required=False, default=200.0,
@@ -212,13 +215,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
               help="removes relu field coupling and learns in image space",
                show_default=True)
 @click.option("--data_pose_mode", type=click.BOOL, required=False, default=False,
-              help="removes relu field coupling and learns in image space",
+              help="uses poses from a given dataset instead of random sampling",
                show_default=True)
 @click.option("--uncoupled_l2_mode", type=click.BOOL, required=False, default=False,
-              help="removes relu field coupling and learns in image space",
+              help="removes relu field coupling and learns in image space with the l2 loss function",
                show_default=True)
-
-
+@click.option("--l2_mode", type=click.BOOL, required=False, default=False,
+              help="switches the DCL loss function with an L2 function between density grids",
+               show_default=True)
+@click.option("--l1_mode", type=click.BOOL, required=False, default=False,
+              help="switches the DCL loss function with an L1 function between density grids",
+               show_default=True)
 @click.option("--post_process_scc", type=click.BOOL, required=False, default=False,
               help="run post process strongly connected components",
                show_default=True)
@@ -260,6 +267,11 @@ def main(**kwargs) -> None:
             rgba_white_bkgd=config.white_bkgd,
         )
 
+    # set up image dims
+    im_h = train_dataset._camera_intrinsics.height
+    im_w = train_dataset._camera_intrinsics.width
+    image_dims = (im_h, im_w)
+
     pretrained_vol_mod, _ = create_volumetric_model_from_saved_model(
         model_path=model_path,
         thre3d_repr_creator=create_voxel_grid_from_saved_info_dict,
@@ -272,7 +284,7 @@ def main(**kwargs) -> None:
     train_sh_vox_grid_vol_mod_with_posed_images_and_sds(
         sds_vol_mod=sds_vol_mod,
         pretrained_vol_mod=pretrained_vol_mod,
-        image_dims=config.image_dims,
+        image_dims=image_dims,
         train_dataset=train_dataset,
         output_dir=output_path,
         ray_batch_size=config.ray_batch_size,
@@ -302,6 +314,8 @@ def main(**kwargs) -> None:
         data_pose_mode=config.data_pose_mode,
         uncoupled_l2_mode=config.uncoupled_l2_mode,
         log_wandb=config.log_wandb,
+        l2_mode=config.l2_mode,
+        l1_mode=config.l1_mode,
     )
     
     if config.do_refinement == True:
@@ -322,6 +336,9 @@ def main(**kwargs) -> None:
             device=device,
         )
 
+        # convert space separated string to list of ints
+        edit_idx = [int(i) for i in config.edit_idx.split()]
+
         refine_edited_relu_field(
             vol_mod_edit=vol_mod_edit,
             vol_mod_object=vol_mod_obj,
@@ -331,12 +348,13 @@ def main(**kwargs) -> None:
             hf_auth_token=config.hf_auth_token,
             output_dir=output_path,
             prompt=config.prompt,
-            edit_idx=config.edit_idx,
+            edit_idx=edit_idx,
             object_idx=config.object_idx,
             timestamp=config.timestamp,
-            image_dims=config.image_dims,
+            image_dims=image_dims,
+            ray_batch_size=config.ray_batch_size,
             num_iterations=config.num_iterations_refine,
-            learning_rate=config.learning_rate,
+            learning_rate=config.learning_rate_attn_learning,
             save_freq=config.save_frequency,
             feedback_freq=config.feedback_frequency,
             summary_freq=config.summary_frequency,
@@ -350,6 +368,8 @@ def main(**kwargs) -> None:
             top_k_edit_thresh=config.top_k_edit_thresh,
             top_k_obj_thresh=config.top_k_obj_thresh,
             log_wandb=config.log_wandb,
+            data_pose_mode=config.data_pose_mode,
+            downsample_refine_grid=config.downsample_refine_grid,
         )
         if config.post_process_scc:
             vol_mod, _ = create_volumetric_model_from_saved_model_attn(

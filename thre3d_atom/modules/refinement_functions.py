@@ -180,14 +180,28 @@ def gen_id(t_in, x, y):
 
 
 def build_graph(features, densities, edit_attn, obj_attn, K=0.05, sigma=0.1, edit_mask_thresh=0.992,
-                num_obj_voxels_thresh=5000, min_num_edit_voxels=300, top_k_edit_thresh=300, top_k_obj_thresh=200):
+                num_obj_voxels_thresh=5000, min_num_edit_voxels=300, top_k_edit_thresh=300, top_k_obj_thresh=200,
+                downsample_grid=False, downsample_factor=4):
     g = maxflow.Graph[float]()
     m = torch.nn.MaxPool3d(3, stride=1, padding=1)
 
     # calculate indexes:
-    non_zero_densities = m(densities) > 0.0
+    if downsample_grid:
+        max_pool = torch.nn.MaxPool3d(downsample_factor, stride=downsample_factor, padding=0)
+        avg_pool = torch.nn.AvgPool3d(downsample_factor, stride=downsample_factor, padding=0)
+        density_grid = max_pool(densities.permute(-1, 0, 1, 2)).permute(1, 2, 3, 0)
+        feature_grid = avg_pool(features.permute(-1, 0, 1, 2)).permute(1, 2, 3, 0)
+        non_zero_densities = density_grid > 0.0
+        edit_attn_vals = max_pool(edit_attn.permute(-1, 0, 1, 2)).permute(1, 2, 3, 0)[non_zero_densities].unsqueeze(-1)
+        obj_attn_vals = max_pool(obj_attn.permute(-1, 0, 1, 2)).permute(1, 2, 3, 0)[non_zero_densities].unsqueeze(-1)
+    else:
+        density_grid = densities
+        feature_grid = features
+        non_zero_densities = m(density_grid) > 0.0
+        edit_attn_vals = edit_attn[non_zero_densities].unsqueeze(-1)
+        obj_attn_vals = obj_attn[non_zero_densities].unsqueeze(-1)
 
-    x, y, z, _ = densities.shape
+    x, y, z, _ = density_grid.shape
     x_idxs = torch.arange(x)
     y_idxs = torch.arange(y)
     z_idxs = torch.arange(z)
@@ -200,15 +214,16 @@ def build_graph(features, densities, edit_attn, obj_attn, K=0.05, sigma=0.1, edi
     # add nodes:
     num_nodes = non_zero_densities.sum()
     nodes = g.add_nodes(num_nodes)
+
     # node idx dict
     idx_dict = {}
-    for i in range(num_nodes):
+    i = range(num_nodes)
+    print(f"Generating IDs:")
+    for i in tqdm(range(num_nodes)):
         idx_dict[gen_id(idx_values[i], x, y)] = i
-
+    
     # calc attn diff:
     softmax_fn = torch.nn.Softmax(dim=-1)
-    edit_attn_vals = edit_attn[non_zero_densities].unsqueeze(-1)
-    obj_attn_vals = obj_attn[non_zero_densities].unsqueeze(-1)
     probs = softmax_fn(torch.cat((edit_attn_vals, obj_attn_vals), dim=-1))
 
     # initialize according to max:
@@ -224,6 +239,7 @@ def build_graph(features, densities, edit_attn, obj_attn, K=0.05, sigma=0.1, edi
     top_k_best_obj_idxs = obj_idxs[idx]
 
     if best_voxels_edit_mask.sum() < min_num_edit_voxels:
+        print("Not enough edit voxels, using top k edit voxels")
         edit_topk = torch.topk(edit_attn_vals.squeeze(), top_k_edit_thresh)
         top_k_best_edit_idxs = edit_topk.indices
 
@@ -245,21 +261,22 @@ def build_graph(features, densities, edit_attn, obj_attn, K=0.05, sigma=0.1, edi
         for n_offset in g_neighbor_offsets:
             n_offset = torch.tensor(n_offset)
             # check for idxs outside grid
-            if (((nidx + n_offset) >= x).sum() > 0) or \
-                (((nidx + n_offset) >= y).sum() > 0) or (((nidx + n_offset) >= z).sum() > 0):
+            if (((nidx + n_offset) >= x).sum() > 0.0) or \
+                (((nidx + n_offset) >= y).sum() > 0.0) or (((nidx + n_offset) >= z).sum() > 0.0):
                 continue
             # check for negative idxs:
-            if ((nidx + n_offset) < 0).sum() > 0:
+            if ((nidx + n_offset) < 0).sum() > 0.0:
                 continue
-            # cmake sure neighbor has density:
-            if densities[(nidx + n_offset).unsqueeze(-1).tolist()].item() <= 0:
+            # make sure neighbor has density:
+            pot_n_offset = nidx + n_offset
+            if density_grid[pot_n_offset[0], pot_n_offset[1], pot_n_offset[2], 0].item() <= 0.0:
                 continue
 
             neighbor_node_idx = idx_dict[gen_id(nidx + n_offset, x, y)]
 
             # calculate L2 diff:
-            node_feature = features[nidx.unsqueeze(-1).tolist()].squeeze()
-            neighbor_feature = features[(nidx + n_offset).unsqueeze(-1).tolist()].squeeze()
+            node_feature = feature_grid[nidx.unsqueeze(-1).tolist()].squeeze()
+            neighbor_feature = feature_grid[(nidx + n_offset).unsqueeze(-1).tolist()].squeeze()
             l2_probs = torch.sqrt(((probs[i] - probs[nidx]) ** 2).sum())
             l2_colors = torch.sqrt(((node_feature - neighbor_feature) ** 2).sum())
 
@@ -272,7 +289,8 @@ def build_graph(features, densities, edit_attn, obj_attn, K=0.05, sigma=0.1, edi
     print(f"Calculating Min Cut...")
     flow = g.maxflow()
     print(f"Done!")
-    segments = [g.get_segment(nodes[i]) for i in range(num_nodes)]
+    print(f"Labeling segments:")
+    segments = [g.get_segment(nodes[i]) for i in tqdm(range(num_nodes))]
     segments = torch.tensor(segments)
     segment_idxs = idx_values
     print(f"{(segments == 0).sum()} Voxels marked as Edit")
@@ -333,14 +351,16 @@ def set_and_visualize_refined_grid(vol_mod_edit: VolumetricModel,
 def get_edit_region(vol_mod_edit: VolumetricModel,
                     vol_mod_object: VolumetricModel,
                     vol_mod_output: VolumetricModel,
-                    rays: Rays,
-                    img_height: int,
-                    img_width: int,
-                    step: int = 0,
+                    downsample_grid: bool = False,
+                    downsample_factor: int = 4,
                     K: int = 5.0,
                     sigma: float = 0.1,
-                    produce_scatter_plot: bool = False, edit_mask_thresh=0.992,
-                    num_obj_voxels_thresh=5000, min_num_edit_voxels=300, top_k_edit_thresh=300, top_k_obj_thresh=200):
+                    #produce_scatter_plot: bool = False, 
+                    edit_mask_thresh=0.992,
+                    num_obj_voxels_thresh=5000, 
+                    min_num_edit_voxels=300, 
+                    top_k_edit_thresh=300, 
+                    top_k_obj_thresh=200):
     # first make sure the densities and features of both grids are the same
     assert (
         torch.eq(vol_mod_edit.thre3d_repr._densities, vol_mod_object.thre3d_repr._densities).all().item()
@@ -359,56 +379,28 @@ def get_edit_region(vol_mod_edit: VolumetricModel,
 
         ids, idxs = build_graph(features, densities, edit_attn, obj_attn, K=K, sigma=sigma,
                                 edit_mask_thresh=edit_mask_thresh,
-                                num_obj_voxels_thresh=num_obj_voxels_thresh, min_num_edit_voxels=min_num_edit_voxels,
-                                top_k_edit_thresh=top_k_edit_thresh, top_k_obj_thresh=top_k_obj_thresh)
+                                num_obj_voxels_thresh=num_obj_voxels_thresh, 
+                                min_num_edit_voxels=min_num_edit_voxels,
+                                top_k_edit_thresh=top_k_edit_thresh, 
+                                top_k_obj_thresh=top_k_obj_thresh,
+                                downsample_grid=downsample_grid)
 
-        if produce_scatter_plot:
-            non_zero_densities = densities > 0.0
-            density_vals = vol_mod_edit.thre3d_repr._densities[non_zero_densities].detach()
+        # Create keep grid
+        keep_grid = torch.ones_like(edit_attn) * -10
+        keep_grid[densities > 0.0] = -5
+        edit_ids = (idxs[ids == 0]).tolist()
 
-            edit_attn_values = torch.sigmoid(vol_mod_edit.thre3d_repr.attn[non_zero_densities])
-            edit_attn_values = (edit_attn_values * density_vals).unsqueeze(dim=-1)
+        # Mark edit voxels
+        if downsample_grid:
+            factor = downsample_factor
+        else:
+            factor = 1
 
-            object_attn_values = torch.sigmoid(vol_mod_object.thre3d_repr.attn[non_zero_densities])
-            object_attn_values = (object_attn_values * density_vals).unsqueeze(dim=-1)
+        for idx in edit_ids:
+            keep_grid[idx[0] * factor: idx[0] * factor + factor, 
+                      idx[1] * factor: idx[1] * factor + factor,
+                      idx[2] * factor: idx[2] * factor + factor] = 0.0 
 
-            feature_values = features[non_zero_densities.squeeze()]
-            feature_values = feature_values
-
-            device = vol_mod_edit.thre3d_repr._densities.device
-
-            # get coordinate grid
-            x, y, z, _ = vol_mod_edit.thre3d_repr._densities.shape
-            x_idxs = torch.arange(x)
-            y_idxs = torch.arange(y)
-            z_idxs = torch.arange(z)
-            grid_x, grid_y, grid_z = torch.meshgrid((x_idxs, y_idxs, z_idxs), indexing='ij')
-            idx_grid = torch.cat((grid_x.unsqueeze(dim=-1),
-                                  grid_y.unsqueeze(dim=-1),
-                                  grid_z.unsqueeze(dim=-1)), dim=-1)
-            idx_values = idx_grid[non_zero_densities.cpu().squeeze()]
-
-            # normalize and cluster
-            idx_values = ((idx_values / idx_values.max())).to(device)
-            feature_values = (feature_values / feature_values.max()).to(device)
-            edit_attn_values = (edit_attn_values / object_attn_values.max()).to(device)
-            object_attn_values = (object_attn_values / object_attn_values.max()).to(device)
-
-            plot_scatter(locations=idx_values,
-                         features=feature_values,
-                         edit_attn_map=edit_attn_values,
-                         object_attn_map=object_attn_values,
-                         cluster_ids=ids,
-                         step=step)
-
-        set_and_visualize_refined_grid(vol_mod_edit=vol_mod_edit,
-                                       vol_mod_object=vol_mod_object,
-                                       vol_mod_output=vol_mod_output,
-                                       rays=rays,
-                                       img_height=img_height,
-                                       img_width=img_width,
-                                       ids=ids,
-                                       idxs=idxs,
-                                       step=step)
-
+        # Set output attn grid
+        vol_mod_output.thre3d_repr.attn = torch.nn.Parameter(keep_grid)
         print(f"Finished calculating edit / object regions!")
