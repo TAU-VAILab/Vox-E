@@ -134,7 +134,7 @@ def main(**kwargs) -> None:
         data_path = Path(config.data_path)
         image_path = data_path / "train"
         train_dataset = PosedImagesDataset(
-                images_dir=data_path / "train",
+                images_dir=image_path,
                 camera_params_json=data_path / f"train_camera_params.json",
                 normalize_scene_scale=False,
                 downsample_factor=1.0,
