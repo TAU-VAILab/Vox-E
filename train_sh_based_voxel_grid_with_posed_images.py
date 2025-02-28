@@ -25,7 +25,7 @@ cudnn.benchmark = True
 # Also set torch's multiprocessing start method to spawn
 # refer -> https://github.com/pytorch/pytorch/issues/40403
 # for more information. Some stupid PyTorch stuff to take care of
-torch.multiprocessing.set_start_method("spawn")
+torch.multiprocessing.set_start_method("spawn", force=True)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
