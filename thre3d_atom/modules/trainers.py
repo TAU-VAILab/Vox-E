@@ -520,7 +520,7 @@ def _make_dataloader_from_dataset(
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
-        num_workers=0 if dataset.cached_data_mode else dataset,
+        num_workers=num_workers,
         pin_memory=not dataset.cached_data_mode and num_workers > 0,
         prefetch_factor=num_workers
         if not dataset.cached_data_mode and num_workers > 0
